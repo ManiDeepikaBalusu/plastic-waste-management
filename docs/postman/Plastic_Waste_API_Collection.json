@@ -1,0 +1,149 @@
+{
+  "info": {
+    "_postman_id": "b1c2d3e4-f5a6-7890-1234-bcdefa567890",
+    "name": "Plastic Waste Management - Complete API Suite",
+    "description": "Postman API Collection for Auth, Media Upload, Complaints Lifecycle, State Machine Transitions, and Notifications.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:8080/api/v1", "type": "string" },
+    { "key": "jwt_token", "value": "", "type": "string" },
+    { "key": "current_user_id", "value": "", "type": "string" },
+    { "key": "complaint_id", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "1. Authentication",
+      "item": [
+        {
+          "name": "Register Citizen",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"citizen.jane@example.org\",\n  \"password\": \"CitizenSecret123!\",\n  \"fullName\": \"Jane Citizen\",\n  \"phone\": \"+1-555-0199\",\n  \"role\": \"CITIZEN\"\n}"
+            },
+            "url": { "raw": "{{base_url}}/auth/register", "host": ["{{base_url}}"], "path": ["auth", "register"] }
+          }
+        },
+        {
+          "name": "Login Citizen",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.token) {",
+                  "    pm.collectionVariables.set('jwt_token', jsonData.token);",
+                  "    pm.collectionVariables.set('current_user_id', jsonData.user.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"citizen.jane@example.org\",\n  \"password\": \"CitizenSecret123!\"\n}"
+            },
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth", "login"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Complaints Lifecycle",
+      "item": [
+        {
+          "name": "Create Waste Complaint (Citizen)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.id) {",
+                  "    pm.collectionVariables.set('complaint_id', jsonData.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{jwt_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Plastic bottles dumped at Central Park\",\n  \"description\": \"High accumulation of single-use plastic bottles near pond shore.\",\n  \"wasteType\": \"PLASTIC_BOTTLES\",\n  \"estimatedSize\": \"LARGE_DUMP\",\n  \"latitude\": 12.9715987,\n  \"longitude\": 77.5945627,\n  \"addressText\": \"Central Park Pond, Sector 4\",\n  \"imageUrls\": [\n    \"https://res.cloudinary.com/demo/image/upload/v123456/park_dump.jpg\"\n  ]\n}"
+            },
+            "url": { "raw": "{{base_url}}/complaints", "host": ["{{base_url}}"], "path": ["complaints"] }
+          }
+        },
+        {
+          "name": "Get My Complaints (Citizen)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{jwt_token}}" }],
+            "url": { "raw": "{{base_url}}/complaints/my", "host": ["{{base_url}}"], "path": ["complaints", "my"] }
+          }
+        },
+        {
+          "name": "Get Complaint Details",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{jwt_token}}" }],
+            "url": { "raw": "{{base_url}}/complaints/{{complaint_id}}", "host": ["{{base_url}}"], "path": ["complaints", "{{complaint_id}}"] }
+          }
+        },
+        {
+          "name": "Triage Complaint - Mark Under Review (Admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{jwt_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/complaints/{{complaint_id}}/review?remarks=Initiating+inspector+triage",
+              "host": ["{{base_url}}"],
+              "path": ["complaints", "{{complaint_id}}", "review"],
+              "query": [{ "key": "remarks", "value": "Initiating+inspector+triage" }]
+            }
+          }
+        },
+        {
+          "name": "Verify Complaint (Admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{jwt_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/complaints/{{complaint_id}}/verify?remarks=Site+confirmed+for+volunteer+dispatch",
+              "host": ["{{base_url}}"],
+              "path": ["complaints", "{{complaint_id}}", "verify"],
+              "query": [{ "key": "remarks", "value": "Site+confirmed+for+volunteer+dispatch" }]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Notifications",
+      "item": [
+        {
+          "name": "Get My Notifications",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{jwt_token}}" }],
+            "url": { "raw": "{{base_url}}/notifications", "host": ["{{base_url}}"], "path": ["notifications"] }
+          }
+        }
+      ]
+    }
+  ]
+}
