@@ -24,7 +24,8 @@ public record AssignmentResponse(
         OffsetDateTime completedAt,
         String verificationStatus,
         String verificationNotes,
-        List<String> resolutionProofUrls
+        List<String> resolutionProofUrls,
+        List<String> initialProofUrls
 ) {
     public AssignmentResponse(
             UUID id, UUID complaintId, String complaintTitle, String complaintStatus,
@@ -34,14 +35,31 @@ public record AssignmentResponse(
             String verificationStatus, String verificationNotes) {
         this(id, complaintId, complaintTitle, complaintStatus, latitude, longitude, addressText,
                 volunteerId, volunteerName, status, notes, assignedAt, acceptedAt, completedAt,
-                verificationStatus, verificationNotes, List.of());
+                verificationStatus, verificationNotes, List.of(), List.of());
+    }
+
+    public AssignmentResponse(
+            UUID id, UUID complaintId, String complaintTitle, String complaintStatus,
+            BigDecimal latitude, BigDecimal longitude, String addressText,
+            UUID volunteerId, String volunteerName, String status, String notes,
+            OffsetDateTime assignedAt, OffsetDateTime acceptedAt, OffsetDateTime completedAt,
+            String verificationStatus, String verificationNotes,
+            List<String> resolutionProofUrls) {
+        this(id, complaintId, complaintTitle, complaintStatus, latitude, longitude, addressText,
+                volunteerId, volunteerName, status, notes, assignedAt, acceptedAt, completedAt,
+                verificationStatus, verificationNotes, resolutionProofUrls, List.of());
     }
 
     public static AssignmentResponse fromEntity(Assignment a) {
-        List<String> proofUrls = List.of();
+        List<String> resolutionProofUrls = List.of();
+        List<String> initialProofUrls = List.of();
         if (a.getComplaint() != null && a.getComplaint().getImages() != null) {
-            proofUrls = a.getComplaint().getImages().stream()
+            resolutionProofUrls = a.getComplaint().getImages().stream()
                     .filter(img -> "RESOLUTION_PROOF".equalsIgnoreCase(img.getImageType()))
+                    .map(com.waste.management.entity.ComplaintImage::getImageUrl)
+                    .toList();
+            initialProofUrls = a.getComplaint().getImages().stream()
+                    .filter(img -> "INITIAL_PROOF".equalsIgnoreCase(img.getImageType()))
                     .map(com.waste.management.entity.ComplaintImage::getImageUrl)
                     .toList();
         }
@@ -63,7 +81,8 @@ public record AssignmentResponse(
                 a.getCompletedAt(),
                 a.getVerificationStatus(),
                 a.getVerificationNotes(),
-                proofUrls
+                resolutionProofUrls,
+                initialProofUrls
         );
     }
 }

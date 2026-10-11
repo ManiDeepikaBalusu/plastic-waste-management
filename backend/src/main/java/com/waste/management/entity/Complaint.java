@@ -50,6 +50,7 @@ public class Complaint {
     private String rejectionReason;
 
     @OneToMany(mappedBy = "complaint", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("uploadedAt ASC")
     private List<ComplaintImage> images = new ArrayList<>();
 
     @Column(name = "created_at", nullable = false, updatable = false)

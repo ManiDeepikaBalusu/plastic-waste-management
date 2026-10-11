@@ -16,7 +16,9 @@ import {
   Sparkles,
   ArrowRight,
   ShieldCheck,
-  AlertTriangle
+  AlertTriangle,
+  Maximize2,
+  X
 } from 'lucide-react';
 
 export default function VolunteerTaskDetailPage() {
@@ -36,6 +38,9 @@ export default function VolunteerTaskDetailPage() {
   const [resolutionNotes, setResolutionNotes] = useState('');
   const [deviceMetadata, setDeviceMetadata] = useState(null);
   const [showCamera, setShowCamera] = useState(false);
+  const [selectedInitialIdx, setSelectedInitialIdx] = useState(0);
+  const [selectedResolutionIdx, setSelectedResolutionIdx] = useState(0);
+  const [lightboxPhoto, setLightboxPhoto] = useState(null);
 
   useEffect(() => {
     async function loadTaskDetails() {
@@ -229,6 +234,37 @@ export default function VolunteerTaskDetailPage() {
     status: task?.status || 'ASSIGNED'
   };
 
+  // Strictly separate citizen initial proof from volunteer resolution proof
+  const citizenInitialImages = (complaint?.images || []).filter(
+    (img) => img.imageType === 'INITIAL_PROOF'
+  );
+  const taskInitialImages = (task?.initialProofUrls || []).map((url, idx) => ({
+    id: `task-init-${idx}`,
+    imageUrl: url,
+    imageType: 'INITIAL_PROOF'
+  }));
+  const initialImages = citizenInitialImages.length > 0
+    ? citizenInitialImages
+    : taskInitialImages.length > 0
+    ? taskInitialImages
+    : (complaint?.images || []).filter((img) => img.imageType !== 'RESOLUTION_PROOF');
+
+  const activeInitialImage = initialImages[selectedInitialIdx] || initialImages[0] || null;
+
+  const volunteerCleanupImages = (complaint?.images || []).filter(
+    (img) => img.imageType === 'RESOLUTION_PROOF'
+  );
+  const taskProofUrls = task?.resolutionProofUrls || [];
+  const resolutionProofUrls = Array.from(
+    new Set([...taskProofUrls, ...volunteerCleanupImages.map((img) => img.imageUrl)])
+  );
+
+  const activeResolutionImageUrl =
+    resolutionProofUrls[selectedResolutionIdx] ||
+    resolutionProofUrls[0] ||
+    resolutionPreview ||
+    null;
+
   return (
     <div className="main-content">
       <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
@@ -368,95 +404,219 @@ export default function VolunteerTaskDetailPage() {
         {/* Before vs After Photo Proof Section */}
         <div className="glass-panel" style={{ padding: '2rem', marginBottom: '2rem' }}>
           <h3 style={{ fontSize: '1.25rem', fontWeight: 800, marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Camera size={20} color="var(--primary)" />
-            Before & After Verification Proof
-          </h3>
+                <Camera size={20} color="var(--primary)" />
+                Before & After Verification Proof
+              </h3>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '2rem' }}>
-            {/* Before Photo */}
-            <div>
-              <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
-                1. Initial Proof Photo (Reported by Citizen)
-              </h4>
-              <div style={{ height: '220px', borderRadius: 'var(--radius-sm)', overflow: 'hidden', border: '1px solid var(--border-subtle)', background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                {complaint?.images && complaint.images.length > 0 ? (
-                  <img src={complaint.images[0].imageUrl} alt="Before" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                ) : (
-                  <span style={{ color: 'var(--text-dim)', fontSize: '0.85rem' }}>No initial photo recorded</span>
-                )}
-              </div>
-            </div>
-
-            {/* After Photo Upload */}
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', flexWrap: 'wrap', gap: '0.5rem' }}>
-                <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--primary)', margin: 0 }}>
-                  2. Resolution Proof Photo (Uploaded by Volunteer)
-                </h4>
-                {deviceMetadata?.deviceLatitude && (
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.35rem',
-                    padding: '0.15rem 0.5rem',
-                    borderRadius: '12px',
-                    background: 'rgba(16, 185, 129, 0.15)',
-                    border: '1px solid rgba(16, 185, 129, 0.3)',
-                    color: '#34d399',
-                    fontSize: '0.72rem',
-                    fontWeight: 600
-                  }}>
-                    <ShieldCheck size={12} />
-                    GPS Attached: {Number(deviceMetadata.deviceLatitude).toFixed(4)}, {Number(deviceMetadata.deviceLongitude).toFixed(4)}
-                  </div>
-                )}
-              </div>
-
-              {task?.status === 'COMPLETED' || task?.verificationStatus === 'NEEDS_REVIEW' || task?.verificationStatus === 'APPROVED_BY_ADMIN' || (task?.verificationStatus !== 'REJECTED_BY_ADMIN' && task?.resolutionProofUrls && task.resolutionProofUrls.length > 0) ? (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '2rem' }}>
+                {/* 1. Original Complaint Photo (Reported by Citizen) */}
                 <div>
-                  <div style={{ height: '220px', borderRadius: 'var(--radius-sm)', overflow: 'hidden', border: '1px solid rgba(16, 185, 129, 0.4)', background: '#020617', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    {task.resolutionProofUrls && task.resolutionProofUrls[0] ? (
-                      <img src={task.resolutionProofUrls[0]} alt="Resolution Proof" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    ) : resolutionPreview ? (
-                      <img src={resolutionPreview} alt="Resolution Proof" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                    <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-muted)', margin: 0, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <span style={{ color: 'var(--accent-cyan)' }}>●</span>
+                      Original Complaint Photo
+                      <span style={{ fontSize: '0.78rem', fontWeight: 500, color: 'var(--text-dim)' }}>(Reported by Citizen)</span>
+                    </h4>
+                    {initialImages.length > 1 && (
+                      <span style={{ fontSize: '0.75rem', color: 'var(--accent-cyan)', background: 'rgba(56, 189, 248, 0.1)', padding: '0.1rem 0.45rem', borderRadius: '4px' }}>
+                        {initialImages.length} photos
+                      </span>
+                    )}
+                  </div>
+
+                  <div
+                    onClick={() => activeInitialImage?.imageUrl && setLightboxPhoto(activeInitialImage.imageUrl)}
+                    style={{
+                      height: '220px',
+                      borderRadius: 'var(--radius-sm)',
+                      overflow: 'hidden',
+                      border: '1px solid var(--border-subtle)',
+                      background: 'rgba(0,0,0,0.5)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: activeInitialImage?.imageUrl ? 'pointer' : 'default',
+                      position: 'relative'
+                    }}
+                  >
+                    {activeInitialImage?.imageUrl ? (
+                      <>
+                        <img
+                          src={activeInitialImage.imageUrl}
+                          alt="Original Complaint Photo"
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        />
+                        <div style={{
+                          position: 'absolute',
+                          bottom: '8px',
+                          left: '8px',
+                          background: 'rgba(15, 23, 42, 0.85)',
+                          padding: '2px 8px',
+                          borderRadius: '4px',
+                          fontSize: '0.72rem',
+                          color: 'var(--accent-cyan)',
+                          fontWeight: 600,
+                          border: '1px solid rgba(56, 189, 248, 0.3)'
+                        }}>
+                          Citizen Initial Proof
+                        </div>
+                      </>
                     ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
-                        <Sparkles size={32} color="#10b981" />
-                        <span style={{ fontWeight: 700, color: '#34d399' }}>Verified Site Cleared</span>
+                      <span style={{ color: 'var(--text-dim)', fontSize: '0.85rem' }}>No original complaint photo recorded</span>
+                    )}
+                  </div>
+
+                  {/* Citizen Photos Thumbnails */}
+                  {initialImages.length > 1 && (
+                    <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem', overflowX: 'auto', paddingBottom: '0.25rem' }}>
+                      {initialImages.map((img, i) => (
+                        <img
+                          key={img.id || i}
+                          src={img.imageUrl}
+                          alt={`Citizen photo ${i + 1}`}
+                          onClick={() => setSelectedInitialIdx(i)}
+                          style={{
+                            width: '48px',
+                            height: '48px',
+                            objectFit: 'cover',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            border: selectedInitialIdx === i ? '2px solid var(--accent-cyan)' : '1px solid var(--border-subtle)',
+                            opacity: selectedInitialIdx === i ? 1 : 0.65
+                          }}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* 2. Volunteer Cleanup Proof (Uploaded by Volunteer) */}
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                    <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <span style={{ color: 'var(--primary)' }}>●</span>
+                      Volunteer Cleanup Proof
+                      <span style={{ fontSize: '0.78rem', fontWeight: 500, color: 'var(--text-dim)' }}>(Uploaded by Volunteer)</span>
+                    </h4>
+                    {deviceMetadata?.deviceLatitude && (
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.35rem',
+                        padding: '0.15rem 0.5rem',
+                        borderRadius: '12px',
+                        background: 'rgba(16, 185, 129, 0.15)',
+                        border: '1px solid rgba(16, 185, 129, 0.3)',
+                        color: '#34d399',
+                        fontSize: '0.72rem',
+                        fontWeight: 600
+                      }}>
+                        <ShieldCheck size={12} />
+                        GPS Attached: {Number(deviceMetadata.deviceLatitude).toFixed(4)}, {Number(deviceMetadata.deviceLongitude).toFixed(4)}
                       </div>
                     )}
                   </div>
 
-                  {/* Verification Status Banner */}
-                  <div style={{ marginTop: '0.75rem' }}>
-                    {task.verificationStatus === 'NEEDS_REVIEW' && (
-                      <div style={{ background: 'rgba(245, 158, 11, 0.12)', border: '1px solid rgba(245, 158, 11, 0.35)', color: '#fbbf24', padding: '0.75rem', borderRadius: 'var(--radius-sm)', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <AlertTriangle size={16} />
-                        <div>
-                          <strong>Awaiting Admin Review:</strong> {task.verificationNotes || 'Proof photo held for administrator location review.'}
-                        </div>
+                  {task?.status === 'COMPLETED' || task?.status === 'RESOLVED' || task?.verificationStatus === 'NEEDS_REVIEW' || task?.verificationStatus === 'APPROVED_BY_ADMIN' || (task?.verificationStatus !== 'REJECTED_BY_ADMIN' && resolutionProofUrls.length > 0) ? (
+                    <div>
+                      <div
+                        onClick={() => activeResolutionImageUrl && setLightboxPhoto(activeResolutionImageUrl)}
+                        style={{
+                          height: '220px',
+                          borderRadius: 'var(--radius-sm)',
+                          overflow: 'hidden',
+                          border: '1px solid rgba(16, 185, 129, 0.4)',
+                          background: '#020617',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: activeResolutionImageUrl ? 'pointer' : 'default',
+                          position: 'relative'
+                        }}
+                      >
+                        {activeResolutionImageUrl ? (
+                          <>
+                            <img
+                              src={activeResolutionImageUrl}
+                              alt="Volunteer Cleanup Proof"
+                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            />
+                            <div style={{
+                              position: 'absolute',
+                              bottom: '8px',
+                              left: '8px',
+                              background: 'rgba(15, 23, 42, 0.85)',
+                              padding: '2px 8px',
+                              borderRadius: '4px',
+                              fontSize: '0.72rem',
+                              color: '#34d399',
+                              fontWeight: 600,
+                              border: '1px solid rgba(16, 185, 129, 0.3)'
+                            }}>
+                              Volunteer Resolution Proof
+                            </div>
+                          </>
+                        ) : (
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+                            <Sparkles size={32} color="#10b981" />
+                            <span style={{ fontWeight: 700, color: '#34d399' }}>Verified Site Cleared</span>
+                          </div>
+                        )}
                       </div>
-                    )}
-                    {task.verificationStatus === 'VERIFIED' && (
-                      <div style={{ background: 'rgba(16, 185, 129, 0.12)', border: '1px solid rgba(16, 185, 129, 0.35)', color: '#34d399', padding: '0.75rem', borderRadius: 'var(--radius-sm)', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <ShieldCheck size={16} />
-                        <div>
-                          <strong>GPS Verified:</strong> Cleanup photo verified within site distance tolerance.
+
+                      {/* Resolution Proof Thumbnails */}
+                      {resolutionProofUrls.length > 1 && (
+                        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem', overflowX: 'auto', paddingBottom: '0.25rem' }}>
+                          {resolutionProofUrls.map((url, i) => (
+                            <img
+                              key={i}
+                              src={url}
+                              alt={`Cleanup proof ${i + 1}`}
+                              onClick={() => setSelectedResolutionIdx(i)}
+                              style={{
+                                width: '48px',
+                                height: '48px',
+                                objectFit: 'cover',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                border: selectedResolutionIdx === i ? '2px solid #10b981' : '1px solid var(--border-subtle)',
+                                opacity: selectedResolutionIdx === i ? 1 : 0.65
+                              }}
+                            />
+                          ))}
                         </div>
+                      )}
+
+                      {/* Verification Status Banner */}
+                      <div style={{ marginTop: '0.75rem' }}>
+                        {task.verificationStatus === 'NEEDS_REVIEW' && (
+                          <div style={{ background: 'rgba(245, 158, 11, 0.12)', border: '1px solid rgba(245, 158, 11, 0.35)', color: '#fbbf24', padding: '0.75rem', borderRadius: 'var(--radius-sm)', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <AlertTriangle size={16} />
+                            <div>
+                              <strong>Awaiting Admin Review:</strong> {task.verificationNotes || 'Proof photo held for administrator location review.'}
+                            </div>
+                          </div>
+                        )}
+                        {task.verificationStatus === 'VERIFIED' && (
+                          <div style={{ background: 'rgba(16, 185, 129, 0.12)', border: '1px solid rgba(16, 185, 129, 0.35)', color: '#34d399', padding: '0.75rem', borderRadius: 'var(--radius-sm)', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <ShieldCheck size={16} />
+                            <div>
+                              <strong>GPS Verified:</strong> Cleanup photo verified within site distance tolerance.
+                            </div>
+                          </div>
+                        )}
+                        {task.verificationStatus === 'APPROVED_BY_ADMIN' && (
+                          <div style={{ background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.4)', color: '#34d399', padding: '0.75rem', borderRadius: 'var(--radius-sm)', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <CheckCircle size={16} />
+                            <div>
+                              <strong>Admin Approved:</strong> {task.verificationNotes || 'Manually verified and confirmed by Administrator.'}
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    )}
-                    {task.verificationStatus === 'APPROVED_BY_ADMIN' && (
-                      <div style={{ background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.4)', color: '#34d399', padding: '0.75rem', borderRadius: 'var(--radius-sm)', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <CheckCircle size={16} />
-                        <div>
-                          <strong>Admin Approved:</strong> {task.verificationNotes || 'Manually verified and confirmed by Administrator.'}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <form onSubmit={handleCompleteTask} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    </div>
+                  ) : (
+                    <form onSubmit={handleCompleteTask} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                   {task?.verificationStatus === 'REJECTED_BY_ADMIN' && (
                     <div style={{ background: 'rgba(244, 63, 94, 0.12)', border: '1px solid rgba(244, 63, 94, 0.35)', color: '#f43f5e', padding: '0.75rem', borderRadius: 'var(--radius-sm)', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                       <XCircle size={16} />
@@ -585,6 +745,54 @@ export default function VolunteerTaskDetailPage() {
             onPhotoCaptured={handlePhotoCaptured}
             onClose={() => setShowCamera(false)}
           />
+        )}
+
+        {/* Lightbox Photo Preview */}
+        {lightboxPhoto && (
+          <div
+            onClick={() => setLightboxPhoto(null)}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(0,0,0,0.85)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 200,
+              padding: '1.5rem',
+              cursor: 'zoom-out'
+            }}
+          >
+            <div style={{ position: 'relative', maxWidth: '90vw', maxHeight: '85vh' }} onClick={(e) => e.stopPropagation()}>
+              <img
+                src={lightboxPhoto}
+                alt="Full preview"
+                style={{ maxWidth: '90vw', maxHeight: '85vh', borderRadius: '8px', objectFit: 'contain' }}
+              />
+              <button
+                type="button"
+                onClick={() => setLightboxPhoto(null)}
+                style={{
+                  position: 'absolute',
+                  top: '-12px',
+                  right: '-12px',
+                  background: '#f43f5e',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '28px',
+                  height: '28px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.5)'
+                }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </div>

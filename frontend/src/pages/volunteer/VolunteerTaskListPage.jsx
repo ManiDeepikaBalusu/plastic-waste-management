@@ -99,7 +99,9 @@ export default function VolunteerTaskListPage() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.5rem' }}>
           {filtered.map((task) => {
             const comp = task.complaint || {};
-            const img = comp.images && comp.images.length > 0 ? comp.images[0].imageUrl : null;
+            const img = comp.images?.find((i) => i.imageType === 'INITIAL_PROOF')?.imageUrl
+              || (task.initialProofUrls && task.initialProofUrls.length > 0 ? task.initialProofUrls[0] : null)
+              || (comp.images && comp.images.length > 0 ? comp.images[0].imageUrl : null);
 
             return (
               <div key={task.id} className="glass-panel" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
