@@ -20,6 +20,8 @@ import java.util.UUID;
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(JwtAuthenticationFilter.class);
+
     private final JwtTokenProvider tokenProvider;
     private final CustomUserDetailsService userDetailsService;
 
@@ -41,11 +43,23 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 UUID userId = tokenProvider.getUserIdFromToken(jwt);
                 UserDetails userDetails = userDetailsService.loadUserById(userId);
 
-                UsernamePasswordAuthenticationToken authentication =
-                        new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
-                authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                // Invalidate tokens issued prior to a password reset/change
+                boolean isTokenValidForUser = true;
+                if (userDetails instanceof UserPrincipal principal && principal.getPasswordChangedAt() != null) {
+                    java.util.Date issuedAt = tokenProvider.getIssuedAtFromToken(jwt);
+                    if (issuedAt != null && issuedAt.getTime() < principal.getPasswordChangedAt().toInstant().toEpochMilli() - 1000) {
+                        isTokenValidForUser = false;
+                        log.warn("Rejecting JWT token issued prior to password reset for user ID: {}", userId);
+                    }
+                }
 
-                SecurityContextHolder.getContext().setAuthentication(authentication);
+                if (isTokenValidForUser) {
+                    UsernamePasswordAuthenticationToken authentication =
+                            new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
+                    authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
+                }
             }
         } catch (Exception ex) {
             logger.error("Could not set user authentication in security context", ex);

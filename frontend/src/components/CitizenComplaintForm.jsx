@@ -238,7 +238,7 @@ export default function CitizenComplaintForm({ onComplaintSubmitted }) {
         formData.append('files', file)
       })
 
-      const authToken = localStorage.getItem('jwt_token') || localStorage.getItem('token')
+      const authToken = localStorage.getItem('token')
       const response = await fetch('http://localhost:8080/api/v1/complaints/submit-with-photos', {
         method: 'POST',
         headers: {

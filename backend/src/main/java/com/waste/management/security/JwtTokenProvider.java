@@ -70,6 +70,16 @@ public class JwtTokenProvider {
         return claims.get("role", String.class);
     }
 
+    public Date getIssuedAtFromToken(String token) {
+        Claims claims = Jwts.parser()
+                .verifyWith(key)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
+
+        return claims.getIssuedAt();
+    }
+
     public boolean validateToken(String token) {
         try {
             Jwts.parser().verifyWith(key).build().parseSignedClaims(token);

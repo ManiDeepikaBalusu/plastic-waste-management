@@ -18,8 +18,13 @@ public class UserPrincipal implements UserDetails {
     private final String role;
     private final boolean active;
     private final Collection<? extends GrantedAuthority> authorities;
+    private final java.time.OffsetDateTime passwordChangedAt;
 
     public UserPrincipal(UUID id, String email, String password, String fullName, String role, boolean active, Collection<? extends GrantedAuthority> authorities) {
+        this(id, email, password, fullName, role, active, authorities, null);
+    }
+
+    public UserPrincipal(UUID id, String email, String password, String fullName, String role, boolean active, Collection<? extends GrantedAuthority> authorities, java.time.OffsetDateTime passwordChangedAt) {
         this.id = id;
         this.email = email;
         this.password = password;
@@ -27,6 +32,7 @@ public class UserPrincipal implements UserDetails {
         this.role = role;
         this.active = active;
         this.authorities = authorities;
+        this.passwordChangedAt = passwordChangedAt;
     }
 
     public static UserPrincipal create(User user) {
@@ -43,7 +49,8 @@ public class UserPrincipal implements UserDetails {
                 user.getFullName(),
                 cleanRole,
                 Boolean.TRUE.equals(user.getIsActive()),
-                authorities
+                authorities,
+                user.getPasswordChangedAt()
         );
     }
 
@@ -57,6 +64,10 @@ public class UserPrincipal implements UserDetails {
 
     public String getRole() {
         return role;
+    }
+
+    public java.time.OffsetDateTime getPasswordChangedAt() {
+        return passwordChangedAt;
     }
 
     @Override

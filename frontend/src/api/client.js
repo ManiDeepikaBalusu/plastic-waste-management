@@ -10,6 +10,19 @@ class ApiError extends Error {
   }
 }
 
+let lastUnauthorizedEventTime = 0;
+
+function notifyUnauthorized() {
+  const now = Date.now();
+  // Debounce multiple concurrent 401s (e.g. from Promise.all) within 1 second
+  if (now - lastUnauthorizedEventTime > 1000) {
+    lastUnauthorizedEventTime = now;
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+  }
+}
+
 async function request(endpoint, options = {}) {
   const url = `${BASE_URL}${endpoint}`;
   const token = localStorage.getItem('token');
@@ -41,6 +54,11 @@ async function request(endpoint, options = {}) {
     const data = isJson ? await res.json() : await res.text();
 
     if (!res.ok) {
+      // Gracefully handle expired/invalid session on protected endpoints
+      if (res.status === 401 && !endpoint.startsWith('/auth/')) {
+        notifyUnauthorized();
+      }
+
       let errorMessage = data?.message || data?.error || `Request failed with status ${res.status}`;
       if (data?.validationErrors && typeof data.validationErrors === 'object') {
         const details = Object.values(data.validationErrors).filter(Boolean);
@@ -94,7 +112,10 @@ export const authApi = {
   login: (credentials) => api.post('/auth/login', credentials),
   register: (payload) => api.post('/auth/register', payload),
   getMe: () => api.get('/users/me'),
-  logout: () => api.post('/auth/logout', {})
+  logout: () => api.post('/auth/logout', {}),
+  forgotPassword: (email) => api.post('/auth/forgot-password', { email }),
+  validateResetToken: (token) => api.get(`/auth/reset-password/validate?token=${encodeURIComponent(token)}`),
+  resetPassword: (payload) => api.post('/auth/reset-password', payload)
 };
 
 export const complaintsApi = {

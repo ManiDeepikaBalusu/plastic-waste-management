@@ -13,11 +13,8 @@ export function AuthProvider({ children }) {
       return null;
     }
   });
-  const [loading, setLoading] = useState(() => {
-    const token = localStorage.getItem('token');
-    const savedUser = localStorage.getItem('user');
-    return !!token && !savedUser;
-  });
+  // Maintain loading = true if a stored token exists until verified against /api/v1/users/me
+  const [loading, setLoading] = useState(() => !!localStorage.getItem('token'));
   const [error, setError] = useState(null);
 
   const checkAuth = useCallback(async () => {
@@ -53,13 +50,23 @@ export function AuthProvider({ children }) {
     checkAuth();
   }, [checkAuth]);
 
+  // Gracefully handle expired sessions dispatched from API client interceptor
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      setUser(null);
+      setError('Your session has expired. Please sign in again.');
+    };
+
+    window.addEventListener('auth:unauthorized', handleUnauthorized);
+    return () => window.removeEventListener('auth:unauthorized', handleUnauthorized);
+  }, []);
+
   const login = async (email, password) => {
     try {
       setError(null);
       const res = await authApi.login({ email, password });
       if (res.token) {
         localStorage.setItem('token', res.token);
-        localStorage.setItem('jwt_token', res.token);
       }
       if (res.user) {
         localStorage.setItem('user', JSON.stringify(res.user));

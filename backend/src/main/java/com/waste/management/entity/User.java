@@ -78,6 +78,18 @@ public class User {
     public OffsetDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(OffsetDateTime createdAt) { this.createdAt = createdAt; }
 
+    @Column(name = "password_changed_at")
+    private OffsetDateTime passwordChangedAt;
+
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    private java.util.List<PasswordResetToken> passwordResetTokens = new java.util.ArrayList<>();
+
+    public OffsetDateTime getPasswordChangedAt() { return passwordChangedAt; }
+    public void setPasswordChangedAt(OffsetDateTime passwordChangedAt) { this.passwordChangedAt = passwordChangedAt; }
+
+    public java.util.List<PasswordResetToken> getPasswordResetTokens() { return passwordResetTokens; }
+    public void setPasswordResetTokens(java.util.List<PasswordResetToken> passwordResetTokens) { this.passwordResetTokens = passwordResetTokens; }
+
     public OffsetDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(OffsetDateTime updatedAt) { this.updatedAt = updatedAt; }
 }

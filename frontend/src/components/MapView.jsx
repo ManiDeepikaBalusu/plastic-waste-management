@@ -26,11 +26,17 @@ export default function MapView({
         zoomControl: true
       });
 
-      // Dark / modern carto or openstreetmap tile layer
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      // OpenStreetMap standard tile layer (no API key required)
+      const tileLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         maxZoom: 19
-      }).addTo(map);
+      });
+
+      tileLayer.on('tileerror', (error) => {
+        console.warn('Map tile loading error:', error);
+      });
+
+      tileLayer.addTo(map);
 
       markersGroupRef.current = L.layerGroup().addTo(map);
       mapInstanceRef.current = map;
