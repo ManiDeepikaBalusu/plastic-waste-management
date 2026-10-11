@@ -1,4 +1,6 @@
 import React, { useState } from 'react'
+import InAppCameraCapture from './InAppCameraCapture'
+import { Camera, Upload, ShieldCheck, MapPin } from 'lucide-react'
 
 export default function CitizenComplaintForm({ onComplaintSubmitted }) {
   const [title, setTitle] = useState('')
@@ -10,6 +12,8 @@ export default function CitizenComplaintForm({ onComplaintSubmitted }) {
   const [longitude, setLongitude] = useState('')
   const [selectedFiles, setSelectedFiles] = useState([])
   const [previews, setPreviews] = useState([])
+  const [deviceMetadata, setDeviceMetadata] = useState(null)
+  const [showCamera, setShowCamera] = useState(false)
 
   const [gettingLocation, setGettingLocation] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -87,6 +91,26 @@ export default function CitizenComplaintForm({ onComplaintSubmitted }) {
     setPreviews((prev) => prev.filter((_, i) => i !== index))
   }
 
+  const handlePhotoCaptured = (capture) => {
+    // capture: { file, previewUrl, deviceLatitude, deviceLongitude, deviceCapturedAt, captureSource }
+    setSelectedFiles((prev) => [...prev, capture.file])
+    setPreviews((prev) => [...prev, capture.previewUrl])
+
+    if (capture.deviceLatitude && capture.deviceLongitude) {
+      setLatitude(capture.deviceLatitude.toFixed(7))
+      setLongitude(capture.deviceLongitude.toFixed(7))
+      setDeviceMetadata({
+        deviceLatitude: capture.deviceLatitude,
+        deviceLongitude: capture.deviceLongitude,
+        deviceCapturedAt: capture.deviceCapturedAt,
+        captureSource: capture.captureSource
+      })
+      setSuccessMsg('Live in-app photo captured with verified GPS coordinates attached!')
+      setTimeout(() => setSuccessMsg(''), 4000)
+    }
+    setShowCamera(false)
+  }
+
   // Submit Handler
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -99,7 +123,7 @@ export default function CitizenComplaintForm({ onComplaintSubmitted }) {
     }
 
     if (!latitude || !longitude) {
-      setErrorMsg('Please provide valid Latitude and Longitude coordinates (use GPS button).')
+      setErrorMsg('Please provide valid Latitude and Longitude coordinates (use GPS button or Camera).')
       return
     }
 
@@ -128,7 +152,13 @@ export default function CitizenComplaintForm({ onComplaintSubmitted }) {
         estimatedSize,
         latitude: latNum,
         longitude: lngNum,
-        addressText: addressText.trim()
+        addressText: addressText.trim(),
+        ...(deviceMetadata ? {
+          deviceLatitude: deviceMetadata.deviceLatitude,
+          deviceLongitude: deviceMetadata.deviceLongitude,
+          deviceCapturedAt: deviceMetadata.deviceCapturedAt,
+          captureSource: deviceMetadata.captureSource
+        } : {})
       }
 
       formData.append(
@@ -140,13 +170,11 @@ export default function CitizenComplaintForm({ onComplaintSubmitted }) {
         formData.append('files', file)
       })
 
+      const authToken = localStorage.getItem('jwt_token') || localStorage.getItem('token')
       const response = await fetch('http://localhost:8080/api/v1/complaints/submit-with-photos', {
         method: 'POST',
         headers: {
-          // Token will be sent if logged in via Bearer or HttpOnly cookie
-          ...(localStorage.getItem('jwt_token')
-            ? { Authorization: `Bearer ${localStorage.getItem('jwt_token')}` }
-            : {})
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {})
         },
         body: formData
       })
@@ -161,6 +189,7 @@ export default function CitizenComplaintForm({ onComplaintSubmitted }) {
         setLongitude('')
         setSelectedFiles([])
         setPreviews([])
+        setDeviceMetadata(null)
         if (onComplaintSubmitted) onComplaintSubmitted(result)
       } else {
         const errorData = await response.json().catch(() => ({}))

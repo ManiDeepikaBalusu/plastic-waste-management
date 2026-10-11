@@ -42,6 +42,12 @@ public class Assignment {
     @Column(name = "cancelled_at")
     private OffsetDateTime cancelledAt;
 
+    @Column(name = "verification_status", length = 40)
+    private String verificationStatus = "VERIFIED"; // VERIFIED, NEEDS_REVIEW, REJECTED
+
+    @Column(name = "verification_notes", columnDefinition = "TEXT")
+    private String verificationNotes;
+
     public Assignment() {}
 
     public Assignment(Complaint complaint, User volunteer, User assignedBy) {
@@ -81,4 +87,10 @@ public class Assignment {
 
     public OffsetDateTime getCancelledAt() { return cancelledAt; }
     public void setCancelledAt(OffsetDateTime cancelledAt) { this.cancelledAt = cancelledAt; }
+
+    public String getVerificationStatus() { return verificationStatus; }
+    public void setVerificationStatus(String verificationStatus) { this.verificationStatus = verificationStatus; }
+
+    public String getVerificationNotes() { return verificationNotes; }
+    public void setVerificationNotes(String verificationNotes) { this.verificationNotes = verificationNotes; }
 }

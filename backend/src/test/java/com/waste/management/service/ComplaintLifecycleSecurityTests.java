@@ -59,6 +59,12 @@ class ComplaintLifecycleSecurityTests {
     private NotificationRepository notificationRepository;
 
     @Autowired
+    private AssignmentRepository assignmentRepository;
+
+    @Autowired
+    private VerificationResultRepository verificationResultRepository;
+
+    @Autowired
     private PasswordEncoder passwordEncoder;
 
     @Autowired
@@ -77,7 +83,9 @@ class ComplaintLifecycleSecurityTests {
     void setUp() {
         // Delete in reverse foreign key order
         notificationRepository.deleteAll();
+        assignmentRepository.deleteAll();
         progressUpdateRepository.deleteAll();
+        verificationResultRepository.deleteAll();
         complaintImageRepository.deleteAll();
         complaintRepository.deleteAll();
         volunteerProfileRepository.deleteAll();

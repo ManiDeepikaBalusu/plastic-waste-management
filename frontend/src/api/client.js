@@ -132,12 +132,22 @@ export const assignmentsApi = {
   accept: (id) => api.patch(`/assignments/${id}/accept`),
   decline: (id, reason) => api.patch(`/assignments/${id}/decline${reason ? `?reason=${encodeURIComponent(reason)}` : ''}`),
   start: (id) => api.patch(`/assignments/${id}/start`),
-  resolveWithProof: (id, notes, files = []) => {
+  resolveWithProof: (id, notes, files = [], metadata = {}) => {
     const formData = new FormData();
     if (notes) formData.append('notes', notes);
+    if (metadata.deviceLatitude) formData.append('deviceLatitude', metadata.deviceLatitude);
+    if (metadata.deviceLongitude) formData.append('deviceLongitude', metadata.deviceLongitude);
+    if (metadata.deviceCapturedAt) formData.append('deviceCapturedAt', metadata.deviceCapturedAt);
+    if (metadata.captureSource) formData.append('captureSource', metadata.captureSource);
     files.forEach(file => formData.append('files', file));
     return api.postForm(`/assignments/${id}/resolve`, formData);
   }
+};
+
+export const verificationsApi = {
+  getComplaintVerifications: (complaintId) => api.get(`/verifications/complaint/${complaintId}`),
+  getAssignmentVerifications: (assignmentId) => api.get(`/verifications/assignment/${assignmentId}`),
+  submitDecision: (verificationId, decisionData) => api.post(`/verifications/${verificationId}/decision`, decisionData)
 };
 
 export const notificationsApi = {

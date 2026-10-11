@@ -20,3 +20,7 @@ app:
     cookie-name: jwt_token
   cors:
     allowed-origins: http://localhost:5173
+  verification:
+    location-tolerance-meters: 200.0
+    cleanup-tolerance-meters: 200.0
+    time-tolerance-hours: 24

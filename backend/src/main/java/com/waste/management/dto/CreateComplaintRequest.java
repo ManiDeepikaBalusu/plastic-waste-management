@@ -7,6 +7,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
+import java.time.OffsetDateTime;
 import java.util.List;
 
 public record CreateComplaintRequest(
@@ -33,5 +34,22 @@ public record CreateComplaintRequest(
 
         String addressText,
 
-        List<String> imageUrls
-) {}
+        List<String> imageUrls,
+
+        BigDecimal deviceLatitude,
+        BigDecimal deviceLongitude,
+        OffsetDateTime deviceCapturedAt,
+        String captureSource
+) {
+    public CreateComplaintRequest(
+            String title,
+            String description,
+            String wasteType,
+            String estimatedSize,
+            BigDecimal latitude,
+            BigDecimal longitude,
+            String addressText,
+            List<String> imageUrls) {
+        this(title, description, wasteType, estimatedSize, latitude, longitude, addressText, imageUrls, null, null, null, null);
+    }
+}

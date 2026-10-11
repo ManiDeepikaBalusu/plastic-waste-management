@@ -45,6 +45,8 @@ export default function AdminDashboardPage() {
   };
 
   const pendingTriage = complaints.filter(c => ['SUBMITTED', 'UNDER_REVIEW'].includes(c.status));
+  // Available for assignment: Strictly VERIFIED complaints ready for dispatch (never completed, resolved, or pending verification)
+  const availableForAssignment = complaints.filter(c => c.status === 'VERIFIED');
 
   return (
     <div className="main-content">
@@ -116,7 +118,7 @@ export default function AdminDashboardPage() {
       </div>
 
       {/* Quick Action Navigation Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.25rem', marginBottom: '3rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.25rem', marginBottom: '2.5rem' }}>
         <Link to="/admin/complaints" className="glass-panel" style={{ padding: '1.5rem', textDecoration: 'none', color: 'inherit', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '0.35rem' }}>Manage Complaints</h3>
@@ -142,12 +144,73 @@ export default function AdminDashboardPage() {
         </Link>
       </div>
 
-      {/* Triage Queue: Pending Reports */}
+      {/* Available for Volunteer Assignment Queue */}
+      <div className="glass-panel" style={{ padding: '2rem', marginBottom: '2rem', borderTop: '3px solid #34d399' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+              <CheckCircle size={20} color="#34d399" />
+              <h2 style={{ fontSize: '1.3rem', fontWeight: 700, margin: 0 }}>Available for Assignment (Ready for Dispatch)</h2>
+            </div>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', marginTop: '0.25rem' }}>
+              Verified waste reports ready for volunteer dispatch. Completed, resolved, or pending verification complaints are excluded.
+            </p>
+          </div>
+          <span className="badge-port" style={{ color: '#34d399', borderColor: 'rgba(52, 211, 153, 0.4)' }}>
+            {availableForAssignment.length} Available
+          </span>
+        </div>
+
+        {availableForAssignment.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '2.5rem 1rem', color: 'var(--text-muted)', background: 'rgba(255, 255, 255, 0.02)', borderRadius: 'var(--radius-sm)' }}>
+            No unassigned verified complaints. All active tasks have been dispatched!
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            {availableForAssignment.slice(0, 6).map((item) => (
+              <div
+                key={item.id}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '1rem',
+                  borderRadius: 'var(--radius-sm)',
+                  background: 'rgba(255, 255, 255, 0.02)',
+                  border: '1px solid var(--border-subtle)',
+                  flexWrap: 'wrap',
+                  gap: '1rem'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <StatusBadge status={item.status} size="sm" />
+                  <div>
+                    <h4 style={{ fontSize: '0.95rem', fontWeight: 700 }}>{item.title}</h4>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>
+                      {item.addressText || `${item.latitude}, ${item.longitude}`}
+                    </span>
+                  </div>
+                </div>
+
+                <Link
+                  to={`/admin/complaints/${item.id}`}
+                  className="service-btn"
+                  style={{ fontSize: '0.8rem', padding: '0.4rem 0.8rem', background: 'linear-gradient(135deg, var(--primary), var(--accent-cyan))', color: '#000', fontWeight: 700 }}
+                >
+                  Dispatch Volunteer <ArrowRight size={14} />
+                </Link>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Priority Triage Queue: Pending Reports */}
       <div className="glass-panel" style={{ padding: '2rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
           <div>
             <h2 style={{ fontSize: '1.3rem', fontWeight: 700 }}>Priority Triage Queue</h2>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem' }}>Submissions requiring verification or triage.</p>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem' }}>Submissions requiring verification or evidence review.</p>
           </div>
           <Link to="/admin/complaints" className="service-btn" style={{ fontSize: '0.85rem' }}>
             View All ({complaints.length})

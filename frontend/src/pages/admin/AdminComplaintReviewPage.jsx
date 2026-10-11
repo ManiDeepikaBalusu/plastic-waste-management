@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { api, complaintsApi, volunteersApi, assignmentsApi } from '../../api/client';
+import { api, complaintsApi, volunteersApi, assignmentsApi, verificationsApi } from '../../api/client';
 import StatusBadge from '../../components/StatusBadge';
 import MapView from '../../components/MapView';
 import {
@@ -13,7 +13,10 @@ import {
   Calendar,
   AlertCircle,
   ShieldCheck,
-  Send
+  Send,
+  Info,
+  FileCheck,
+  Hash
 } from 'lucide-react';
 
 export default function AdminComplaintReviewPage() {
@@ -21,10 +24,20 @@ export default function AdminComplaintReviewPage() {
   const navigate = useNavigate();
 
   const [complaint, setComplaint] = useState(null);
+  const [verifications, setVerifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [feedbackMsg, setFeedbackMsg] = useState('');
+
+  // Admin Verification Decision Modal state
+  const [decisionModal, setDecisionModal] = useState({
+    open: false,
+    verificationId: null,
+    decisionType: 'APPROVE',
+    reason: '',
+    error: ''
+  });
 
   // Reject modal state
   const [showRejectModal, setShowRejectModal] = useState(false);
@@ -47,6 +60,8 @@ export default function AdminComplaintReviewPage() {
       setError(null);
       const data = await complaintsApi.getById(id);
       setComplaint(data);
+      const vList = await verificationsApi.getComplaintVerifications(id).catch(() => []);
+      setVerifications(Array.isArray(vList) ? vList : []);
     } catch (err) {
       setError(err.message || 'Failed to load complaint for review');
     } finally {
@@ -57,6 +72,40 @@ export default function AdminComplaintReviewPage() {
   useEffect(() => {
     fetchDetails();
   }, [id]);
+
+  const handleOpenDecisionModal = (verificationId, decisionType) => {
+    setDecisionModal({
+      open: true,
+      verificationId,
+      decisionType,
+      reason: '',
+      error: ''
+    });
+  };
+
+  const handleSubmitDecision = async (e) => {
+    e.preventDefault();
+    if (!decisionModal.reason.trim()) {
+      setDecisionModal(prev => ({ ...prev, error: 'A mandatory review reason is required.' }));
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      setDecisionModal(prev => ({ ...prev, error: '' }));
+      await verificationsApi.submitDecision(decisionModal.verificationId, {
+        decision: decisionModal.decisionType,
+        reason: decisionModal.reason.trim()
+      });
+      setDecisionModal({ open: false, verificationId: null, decisionType: 'APPROVE', reason: '', error: '' });
+      setFeedbackMsg(`Verification record successfully ${decisionModal.decisionType === 'APPROVE' ? 'APPROVED' : 'REJECTED'} by admin.`);
+      fetchDetails();
+    } catch (err) {
+      setDecisionModal(prev => ({ ...prev, error: err.message || 'Failed to submit verification decision.' }));
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   const handleMarkUnderReview = async () => {
     try {
@@ -228,11 +277,48 @@ export default function AdminComplaintReviewPage() {
           <div>
             <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Administrative Triage Actions</h3>
             <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-              Step through verification or reject with audit trail accountability.
+              Step through verification, review cleanup proof, or manage volunteer dispatch.
             </p>
           </div>
 
-          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+            {/* Pending Cleanup Proof Verification Case */}
+            {verifications.find(v => (v.checkType === 'CLEANUP_RESOLUTION' || v.assignmentId) && (v.verificationStatus === 'NEEDS_REVIEW' || v.reviewDecision === 'PENDING')) && (
+              <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '0.82rem', color: '#fbbf24', display: 'flex', alignItems: 'center', gap: '0.35rem', fontWeight: 600 }}>
+                  <AlertTriangle size={15} /> Cleanup Proof Pending Review
+                </span>
+                <button
+                  onClick={() => handleOpenDecisionModal(verifications.find(v => (v.checkType === 'CLEANUP_RESOLUTION' || v.assignmentId) && (v.verificationStatus === 'NEEDS_REVIEW' || v.reviewDecision === 'PENDING')).id, 'APPROVE')}
+                  disabled={actionLoading}
+                  className="service-btn"
+                  style={{ background: 'rgba(16, 185, 129, 0.2)', borderColor: '#10b981', color: '#34d399', fontWeight: 700 }}
+                >
+                  <CheckCircle size={16} /> Approve Cleanup
+                </button>
+                <button
+                  onClick={() => handleOpenDecisionModal(verifications.find(v => (v.checkType === 'CLEANUP_RESOLUTION' || v.assignmentId) && (v.verificationStatus === 'NEEDS_REVIEW' || v.reviewDecision === 'PENDING')).id, 'REJECT')}
+                  disabled={actionLoading}
+                  className="service-btn"
+                  style={{ background: 'rgba(244, 63, 94, 0.2)', borderColor: '#f43f5e', color: '#f43f5e', fontWeight: 700 }}
+                >
+                  <XCircle size={16} /> Reject Cleanup
+                </button>
+              </div>
+            )}
+
+            {/* Initial Citizen Report Under Review */}
+            {complaint.status === 'UNDER_REVIEW' && !verifications.some(v => (v.checkType === 'CLEANUP_RESOLUTION' || v.assignmentId) && (v.verificationStatus === 'NEEDS_REVIEW' || v.reviewDecision === 'PENDING')) && (
+              <button
+                onClick={handleVerify}
+                disabled={actionLoading}
+                className="service-btn"
+                style={{ background: 'linear-gradient(135deg, var(--primary), var(--accent-cyan))', color: '#000', fontWeight: 700 }}
+              >
+                <CheckCircle size={16} /> Verify & Queue for Dispatch
+              </button>
+            )}
+
             {complaint.status === 'SUBMITTED' && (
               <button
                 onClick={handleMarkUnderReview}
@@ -244,29 +330,45 @@ export default function AdminComplaintReviewPage() {
               </button>
             )}
 
-            {complaint.status === 'UNDER_REVIEW' && (
-              <button
-                onClick={handleVerify}
-                disabled={actionLoading}
-                className="service-btn"
-                style={{ background: 'linear-gradient(135deg, var(--primary), var(--accent-cyan))', color: '#000', fontWeight: 700 }}
-              >
-                <CheckCircle size={16} /> Verify & Queue for Dispatch
-              </button>
-            )}
-
-            {['VERIFIED', 'ASSIGNED'].includes(complaint.status) && (
+            {/* Dispatch Volunteer (only when VERIFIED and ready for dispatch) */}
+            {complaint.status === 'VERIFIED' && (
               <button
                 onClick={openAssignModal}
                 disabled={actionLoading}
                 className="service-btn"
                 style={{ background: 'linear-gradient(135deg, var(--primary), var(--accent-cyan))', color: '#000', fontWeight: 700 }}
               >
-                <Send size={16} /> {complaint.status === 'ASSIGNED' ? 'Reassign Volunteer' : 'Dispatch Volunteer'}
+                <Send size={16} /> Dispatch Volunteer
               </button>
             )}
 
-            {['SUBMITTED', 'UNDER_REVIEW'].includes(complaint.status) && (
+            {/* Reassign Volunteer (only when cleanup proof was explicitly rejected) */}
+            {verifications.some(v => (v.checkType === 'CLEANUP_RESOLUTION' || v.assignmentId) && (v.verificationStatus === 'REJECTED' || v.reviewDecision === 'REJECTED')) && !['RESOLVED', 'REJECTED', 'CANCELLED'].includes(complaint.status) && (
+              <button
+                onClick={openAssignModal}
+                disabled={actionLoading}
+                className="service-btn"
+                style={{ background: 'linear-gradient(135deg, #f59e0b, #fbbf24)', color: '#000', fontWeight: 700 }}
+              >
+                <Send size={16} /> Reassign Volunteer
+              </button>
+            )}
+
+            {/* Active Task In Progress Notification */}
+            {['ASSIGNED', 'ACCEPTED', 'IN_PROGRESS'].includes(complaint.status) &&
+             !verifications.some(v => (v.checkType === 'CLEANUP_RESOLUTION' || v.assignmentId) && (v.verificationStatus === 'REJECTED' || v.reviewDecision === 'REJECTED' || v.verificationStatus === 'NEEDS_REVIEW' || v.reviewDecision === 'PENDING')) && (
+              <span style={{ fontSize: '0.85rem', color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 600 }}>
+                <Clock size={16} /> Cleanup in Progress by Assigned Volunteer
+              </span>
+            )}
+
+            {complaint.status === 'RESOLVED' && (
+              <span style={{ fontSize: '0.85rem', color: '#34d399', display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 700 }}>
+                <CheckCircle size={16} /> Completed & Resolved
+              </span>
+            )}
+
+            {['SUBMITTED', 'UNDER_REVIEW'].includes(complaint.status) && !verifications.some(v => (v.checkType === 'CLEANUP_RESOLUTION' || v.assignmentId) && (v.verificationStatus === 'NEEDS_REVIEW' || v.reviewDecision === 'PENDING')) && (
               <button
                 onClick={() => setShowRejectModal(true)}
                 disabled={actionLoading}
@@ -347,6 +449,220 @@ export default function AdminComplaintReviewPage() {
           </div>
         </div>
 
+        {/* GPS-Based Photo Verification & Integrity Console */}
+        <div className="glass-panel" style={{ padding: '2rem', marginBottom: '2rem', borderTop: '3px solid var(--accent-cyan)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+              <ShieldCheck size={24} color="var(--primary)" />
+              <h3 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0 }}>
+                GPS Photo Verification & Integrity Console
+              </h3>
+            </div>
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-dim)', background: 'rgba(255,255,255,0.05)', padding: '0.25rem 0.6rem', borderRadius: '4px' }}>
+              Tolerance: 150m (Citizen) / 100m (Cleanup)
+            </span>
+          </div>
+
+          <div style={{
+            background: 'rgba(14, 165, 233, 0.08)',
+            border: '1px solid rgba(14, 165, 233, 0.25)',
+            borderRadius: 'var(--radius-sm)',
+            padding: '0.85rem 1rem',
+            marginBottom: '1.5rem',
+            fontSize: '0.82rem',
+            color: '#bae6fd',
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '0.6rem',
+            lineHeight: 1.5
+          }}>
+            <Info size={18} style={{ flexShrink: 0, marginTop: '2px' }} />
+            <div>
+              <strong>Untrusted Evidence Model:</strong> Device coordinates and timestamps are compared with embedded EXIF headers and server receipt time.
+              Missing EXIF GPS is standard on modern mobile browsers due to OS privacy stripping and is <em>never</em> treated as fraud.
+            </div>
+          </div>
+
+          {verifications.length === 0 ? (
+            <div style={{ textAlign: 'center', color: 'var(--text-dim)', padding: '1.5rem', background: 'rgba(255,255,255,0.02)', borderRadius: 'var(--radius-sm)' }}>
+              No automated verification records registered for this submission.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              {verifications.map((v, idx) => {
+                const verifStatus = v.verificationStatus || v.status || 'VERIFIED';
+                const distMeters = v.distanceMeters != null ? v.distanceMeters : v.calculatedDistanceMeters;
+                const distTol = v.distanceToleranceMeters != null ? v.distanceToleranceMeters : 200;
+                const isWithinTolerance = distMeters != null ? distMeters <= distTol : true;
+                const auditNotes = v.adminNotes || v.decisionReason;
+                const isPendingDecision = v.reviewDecision === 'PENDING' || verifStatus === 'NEEDS_REVIEW';
+                const flags = typeof v.checkReasons === 'string'
+                  ? (() => { try { return JSON.parse(v.checkReasons); } catch(e) { return []; } })()
+                  : (Array.isArray(v.checkReasons) ? v.checkReasons : (v.flags || []));
+
+                return (
+                  <div
+                    key={v.id || idx}
+                    style={{
+                      background: 'rgba(15, 23, 42, 0.75)',
+                      border: `1px solid ${isPendingDecision ? 'rgba(245, 158, 11, 0.4)' : 'var(--border-subtle)'}`,
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '1.25rem'
+                    }}
+                  >
+                    {/* Record Header */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <FileCheck size={16} color="var(--accent-cyan)" />
+                        <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>
+                          Evidence Record #{idx + 1} ({v.checkType || v.entityType || 'REPORT'})
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span style={{
+                          padding: '0.2rem 0.65rem',
+                          borderRadius: '12px',
+                          fontSize: '0.75rem',
+                          fontWeight: 700,
+                          background: (v.reviewDecision === 'APPROVED' || verifStatus === 'APPROVED_BY_ADMIN') ? 'rgba(14, 165, 233, 0.2)'
+                            : (v.reviewDecision === 'REJECTED' || verifStatus === 'REJECTED_BY_ADMIN') ? 'rgba(244, 63, 94, 0.2)'
+                            : isPendingDecision ? 'rgba(245, 158, 11, 0.2)'
+                            : 'rgba(16, 185, 129, 0.2)',
+                          color: (v.reviewDecision === 'APPROVED' || verifStatus === 'APPROVED_BY_ADMIN') ? '#38bdf8'
+                            : (v.reviewDecision === 'REJECTED' || verifStatus === 'REJECTED_BY_ADMIN') ? '#f43f5e'
+                            : isPendingDecision ? '#fbbf24'
+                            : '#34d399',
+                          border: `1px solid ${
+                            (v.reviewDecision === 'APPROVED' || verifStatus === 'APPROVED_BY_ADMIN') ? 'rgba(14, 165, 233, 0.4)'
+                            : (v.reviewDecision === 'REJECTED' || verifStatus === 'REJECTED_BY_ADMIN') ? 'rgba(244, 63, 94, 0.4)'
+                            : isPendingDecision ? 'rgba(245, 158, 11, 0.4)'
+                            : 'rgba(16, 185, 129, 0.4)'
+                          }`
+                        }}>
+                          {v.reviewDecision === 'APPROVED' ? 'APPROVED_BY_ADMIN' : v.reviewDecision === 'REJECTED' ? 'REJECTED_BY_ADMIN' : verifStatus}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Verification Data Grid */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
+                      {/* Distance Check */}
+                      <div style={{ background: 'rgba(255,255,255,0.02)', padding: '0.75rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', textTransform: 'uppercase', marginBottom: '0.25rem' }}>
+                          Distance to Report Site
+                        </div>
+                        <div style={{ fontSize: '0.95rem', fontWeight: 700, color: isWithinTolerance ? '#34d399' : '#f87171' }}>
+                          {distMeters != null ? `${distMeters.toFixed(1)} m` : 'N/A'}
+                        </div>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '2px' }}>
+                          Tolerance: {distTol ? `${distTol.toFixed(0)}m` : '200m'}
+                          {isWithinTolerance ? ' (Within bounds ✓)' : ' (Exceeded ⚠️)'}
+                        </div>
+                      </div>
+
+                      {/* Device GPS */}
+                      <div style={{ background: 'rgba(255,255,255,0.02)', padding: '0.75rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', textTransform: 'uppercase', marginBottom: '0.25rem' }}>
+                          Device Live GPS
+                        </div>
+                        <div style={{ fontSize: '0.85rem', fontWeight: 600, fontFamily: 'monospace', color: 'var(--text-main)' }}>
+                          {v.deviceLatitude != null ? `${Number(v.deviceLatitude).toFixed(5)}, ${Number(v.deviceLongitude).toFixed(5)}` : 'Not provided'}
+                        </div>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '2px' }}>
+                          {v.verifiedAt ? `Recorded: ${new Date(v.verifiedAt).toLocaleTimeString()}` : 'Live client coordinate'}
+                        </div>
+                      </div>
+
+                      {/* EXIF Metadata */}
+                      <div style={{ background: 'rgba(255,255,255,0.02)', padding: '0.75rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', textTransform: 'uppercase', marginBottom: '0.25rem' }}>
+                          EXIF Embedded GPS
+                        </div>
+                        <div style={{ fontSize: '0.85rem', fontWeight: 600, fontFamily: 'monospace', color: v.exifLatitude ? '#38bdf8' : 'var(--text-muted)' }}>
+                          {v.exifLatitude != null ? `${Number(v.exifLatitude).toFixed(5)}, ${Number(v.exifLongitude).toFixed(5)}` : 'Stripped / Missing'}
+                        </div>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '2px' }}>
+                          {v.exifLatitude != null ? 'Camera Geotag' : 'No EXIF GPS tags'}
+                        </div>
+                      </div>
+
+                      {/* Check Type & Confidence */}
+                      <div style={{ background: 'rgba(255,255,255,0.02)', padding: '0.75rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', textTransform: 'uppercase', marginBottom: '0.25rem' }}>
+                          Audit Type & Verifier
+                        </div>
+                        <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                          {v.checkType || 'INITIAL_REPORT'}
+                        </div>
+                        <div style={{ fontSize: '0.72rem', fontWeight: 600, color: isPendingDecision ? '#fbbf24' : '#34d399', marginTop: '2px' }}>
+                          {isPendingDecision ? '⚠️ Pending Admin Decision' : '✓ Verified by ' + (v.verifierType || 'System')}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Flags */}
+                    {flags && flags.length > 0 && (
+                      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1rem', alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontWeight: 600 }}>Audit Flags:</span>
+                        {flags.map((flag, fIdx) => (
+                          <span
+                            key={fIdx}
+                            style={{
+                              padding: '0.15rem 0.5rem',
+                              borderRadius: '4px',
+                              fontSize: '0.72rem',
+                              fontWeight: 600,
+                              background: flag.includes('EXIF_GPS_STRIPPED') || flag.includes('EXIF_GPS_MISSING') ? 'rgba(148, 163, 184, 0.15)' : flag.includes('MISMATCH') || flag.includes('DUPLICATE') ? 'rgba(244, 63, 94, 0.15)' : 'rgba(16, 185, 129, 0.15)',
+                              color: flag.includes('EXIF_GPS_STRIPPED') || flag.includes('EXIF_GPS_MISSING') ? '#94a3b8' : flag.includes('MISMATCH') || flag.includes('DUPLICATE') ? '#f87171' : '#34d399',
+                              border: `1px solid ${flag.includes('EXIF_GPS_STRIPPED') || flag.includes('EXIF_GPS_MISSING') ? 'rgba(148, 163, 184, 0.3)' : flag.includes('MISMATCH') || flag.includes('DUPLICATE') ? 'rgba(244, 63, 94, 0.3)' : 'rgba(16, 185, 129, 0.3)'}`
+                            }}
+                          >
+                            {flag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Decision info or Actions */}
+                    {isPendingDecision && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(245, 158, 11, 0.08)', padding: '0.75rem 1rem', borderRadius: '6px', border: '1px solid rgba(245, 158, 11, 0.25)', flexWrap: 'wrap', gap: '0.75rem' }}>
+                        <div style={{ fontSize: '0.85rem', color: '#fbbf24', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          <AlertTriangle size={16} />
+                          <span>Requires Admin Decision ({v.checkType || 'Evidence'}). Submissions are preserved for audit review.</span>
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenDecisionModal(v.id, 'APPROVE')}
+                            className="service-btn"
+                            style={{ background: 'rgba(16, 185, 129, 0.2)', borderColor: '#10b981', color: '#34d399', padding: '0.4rem 0.85rem', fontSize: '0.82rem' }}
+                          >
+                            <CheckCircle size={14} /> Approve Photo
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenDecisionModal(v.id, 'REJECT')}
+                            className="service-btn"
+                            style={{ background: 'rgba(244, 63, 94, 0.2)', borderColor: '#f43f5e', color: '#f43f5e', padding: '0.4rem 0.85rem', fontSize: '0.82rem' }}
+                          >
+                            <XCircle size={14} /> Reject Photo
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {(v.reviewDecision === 'APPROVED' || v.reviewDecision === 'REJECTED' || verifStatus === 'APPROVED_BY_ADMIN' || verifStatus === 'REJECTED_BY_ADMIN') && (
+                      <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '0.6rem 0.85rem', borderRadius: '6px', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                        <strong>Admin Audit:</strong> {v.reviewDecision === 'APPROVED' || verifStatus === 'APPROVED_BY_ADMIN' ? 'Approved' : 'Rejected'} — Reason: "{auditNotes || 'None'}" {v.reviewedAt ? `(${new Date(v.reviewedAt).toLocaleString()})` : ''}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
         {/* Proof Photos */}
         <div className="glass-panel" style={{ padding: '2rem', marginBottom: '2rem' }}>
           <h3 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '1rem' }}>
@@ -381,6 +697,77 @@ export default function AdminComplaintReviewPage() {
             </div>
           )}
         </div>
+
+        {/* Admin Verification Decision Modal */}
+        {decisionModal.open && (
+          <div style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.75)',
+            backdropFilter: 'blur(6px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 110,
+            padding: '1rem'
+          }}>
+            <div className="glass-panel" style={{ width: '100%', maxWidth: '440px', padding: '2rem' }}>
+              <h3 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '0.5rem', color: decisionModal.decisionType === 'APPROVE' ? '#34d399' : '#f43f5e' }}>
+                {decisionModal.decisionType === 'APPROVE' ? 'Approve Verification' : 'Reject Verification'}
+              </h3>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', marginBottom: '1.25rem' }}>
+                Please specify a mandatory audit reason for this {decisionModal.decisionType.toLowerCase()} decision.
+              </p>
+
+              {decisionModal.error && (
+                <div style={{ color: '#f43f5e', fontSize: '0.85rem', marginBottom: '1rem' }}>
+                  {decisionModal.error}
+                </div>
+              )}
+
+              <form onSubmit={handleSubmitDecision} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <textarea
+                  required
+                  rows={3}
+                  placeholder={`Mandatory reason for ${decisionModal.decisionType.toLowerCase()}...`}
+                  value={decisionModal.reason}
+                  onChange={(e) => setDecisionModal(prev => ({ ...prev, reason: e.target.value }))}
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem',
+                    borderRadius: 'var(--radius-sm)',
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    border: '1px solid var(--border-subtle)',
+                    color: '#fff',
+                    fontSize: '0.9rem'
+                  }}
+                />
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+                  <button
+                    type="button"
+                    onClick={() => setDecisionModal(prev => ({ ...prev, open: false }))}
+                    className="service-btn"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={actionLoading}
+                    className="service-btn"
+                    style={{
+                      background: decisionModal.decisionType === 'APPROVE' ? '#10b981' : '#f43f5e',
+                      color: '#fff',
+                      border: 'none',
+                      fontWeight: 700
+                    }}
+                  >
+                    {actionLoading ? 'Saving...' : 'Submit Decision'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
 
         {/* Reject Modal */}
         {showRejectModal && (

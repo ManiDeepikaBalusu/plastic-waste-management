@@ -46,6 +46,10 @@ app:
     initial-email: ${ADMIN_INITIAL_EMAIL:}
     initial-password: ${ADMIN_INITIAL_PASSWORD:}
     initial-name: ${ADMIN_INITIAL_NAME:System Administrator}
+  verification:
+    location-tolerance-meters: ${LOCATION_TOLERANCE_METERS:200.0}
+    cleanup-tolerance-meters: ${CLEANUP_TOLERANCE_METERS:200.0}
+    time-tolerance-hours: ${TIME_TOLERANCE_HOURS:24}
 
 management:
   endpoints:

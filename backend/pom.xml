@@ -70,6 +70,13 @@
             <version>${cloudinary.version}</version>
         </dependency>
 
+        <!-- Metadata Extractor for Image EXIF and GPS Coordinates Extraction -->
+        <dependency>
+            <groupId>com.drewnoakes</groupId>
+            <artifactId>metadata-extractor</artifactId>
+            <version>2.19.0</version>
+        </dependency>
+
         <!-- Spring Data JPA -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

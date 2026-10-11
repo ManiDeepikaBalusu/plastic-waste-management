@@ -102,7 +102,16 @@ public class Complaint {
     public void setRejectionReason(String rejectionReason) { this.rejectionReason = rejectionReason; }
 
     public List<ComplaintImage> getImages() { return images; }
-    public void setImages(List<ComplaintImage> images) { this.images = images; }
+    public void setImages(List<ComplaintImage> newImages) {
+        if (this.images == null) {
+            this.images = new ArrayList<>();
+        } else {
+            this.images.clear();
+        }
+        if (newImages != null) {
+            this.images.addAll(newImages);
+        }
+    }
 
     public OffsetDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(OffsetDateTime createdAt) { this.createdAt = createdAt; }

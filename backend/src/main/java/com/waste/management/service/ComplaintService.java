@@ -31,6 +31,7 @@ public class ComplaintService {
     private final NotificationService notificationService;
     private final MediaService mediaService;
     private final ImageValidator imageValidator;
+    private final PhotoVerificationService photoVerificationService;
 
     public ComplaintService(
             ComplaintRepository complaintRepository,
@@ -39,7 +40,8 @@ public class ComplaintService {
             UserRepository userRepository,
             NotificationService notificationService,
             MediaService mediaService,
-            ImageValidator imageValidator) {
+            ImageValidator imageValidator,
+            PhotoVerificationService photoVerificationService) {
         this.complaintRepository = complaintRepository;
         this.complaintImageRepository = complaintImageRepository;
         this.progressUpdateRepository = progressUpdateRepository;
@@ -47,6 +49,7 @@ public class ComplaintService {
         this.notificationService = notificationService;
         this.mediaService = mediaService;
         this.imageValidator = imageValidator;
+        this.photoVerificationService = photoVerificationService;
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -89,7 +92,9 @@ public class ComplaintService {
         Complaint savedComplaint = complaintRepository.save(complaint);
 
         // Upload images to Cloudinary and attach records
-        List<ComplaintImage> complaintImages = new ArrayList<>();
+        boolean anyFlagged = false;
+        StringBuilder flagSummary = new StringBuilder();
+
         for (MultipartFile file : files) {
             MediaUploadResponse uploadRes = mediaService.uploadImage(file);
             ComplaintImage img = new ComplaintImage(
@@ -99,18 +104,42 @@ public class ComplaintService {
                     "INITIAL_PROOF",
                     citizen
             );
-            complaintImages.add(complaintImageRepository.save(img));
+            ComplaintImage savedImg = complaintImageRepository.save(img);
+
+            // Execute automated GPS and EXIF verification
+            PhotoVerificationResultDto verifResult = photoVerificationService.verifyInitialPhoto(
+                    file,
+                    savedComplaint,
+                    savedImg,
+                    request.deviceLatitude(),
+                    request.deviceLongitude(),
+                    request.deviceCapturedAt(),
+                    request.captureSource(),
+                    citizen
+            );
+
+            if ("NEEDS_REVIEW".equalsIgnoreCase(verifResult.verificationStatus()) || "REJECTED".equalsIgnoreCase(verifResult.verificationStatus())) {
+                anyFlagged = true;
+                flagSummary.append(String.join(", ", verifResult.flags())).append("; ");
+            }
+
+            savedComplaint.getImages().add(savedImg);
         }
-        savedComplaint.setImages(complaintImages);
+
+        savedComplaint.setStatus("SUBMITTED");
+        savedComplaint = complaintRepository.save(savedComplaint);
 
         // Record progress update audit trail
+        String auditMessage = anyFlagged
+                ? "Plastic waste report submitted with " + files.size() + " photo(s). Automated verification flagged for review: " + flagSummary
+                : "Plastic waste report submitted with " + files.size() + " photo(s). Auto-verified coordinates.";
         ProgressUpdate log = new ProgressUpdate(
                 savedComplaint,
                 citizen,
                 null,
                 "SUBMITTED",
-                "SUBMISSION",
-                "Plastic waste report submitted with " + files.size() + " photo(s)."
+                anyFlagged ? "FLAGGED_FOR_REVIEW" : "SUBMISSION",
+                auditMessage
         );
         progressUpdateRepository.save(log);
 
@@ -118,7 +147,9 @@ public class ComplaintService {
         notificationService.createNotification(
                 citizen,
                 "Complaint Filed Successfully",
-                "Your plastic waste report '" + savedComplaint.getTitle() + "' has been submitted for review.",
+                anyFlagged
+                        ? "Your report '" + savedComplaint.getTitle() + "' was submitted and flagged for administrative verification."
+                        : "Your plastic waste report '" + savedComplaint.getTitle() + "' has been submitted for review.",
                 "COMPLAINT_SUBMITTED",
                 savedComplaint.getId()
         );
@@ -244,8 +275,8 @@ public class ComplaintService {
         Complaint complaint = complaintRepository.findById(complaintId)
                 .orElseThrow(() -> new ResourceNotFoundException("Complaint not found with id: " + complaintId));
 
-        if (!"UNDER_REVIEW".equalsIgnoreCase(complaint.getStatus())) {
-            throw new IllegalStateException("Cannot verify complaint: Current status is '" + complaint.getStatus() + "'. Expected 'UNDER_REVIEW'.");
+        if (!"UNDER_REVIEW".equalsIgnoreCase(complaint.getStatus()) && !"SUBMITTED".equalsIgnoreCase(complaint.getStatus())) {
+            throw new IllegalStateException("Cannot verify complaint: Current status is '" + complaint.getStatus() + "'. Expected 'UNDER_REVIEW' or 'SUBMITTED'.");
         }
 
         User actor = userRepository.findById(adminUser.getId()).orElseThrow();

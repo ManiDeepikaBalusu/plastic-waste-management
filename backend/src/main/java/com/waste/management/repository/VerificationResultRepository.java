@@ -10,4 +10,7 @@ import java.util.UUID;
 @Repository
 public interface VerificationResultRepository extends JpaRepository<VerificationResult, UUID> {
     List<VerificationResult> findByComplaintId(UUID complaintId);
+    List<VerificationResult> findByComplaintIdOrderByVerifiedAtDesc(UUID complaintId);
+    List<VerificationResult> findByAssignmentId(UUID assignmentId);
+    List<VerificationResult> findByAssignmentIdOrderByVerifiedAtDesc(UUID assignmentId);
 }

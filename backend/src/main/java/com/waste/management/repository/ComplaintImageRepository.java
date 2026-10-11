@@ -10,4 +10,6 @@ import java.util.UUID;
 @Repository
 public interface ComplaintImageRepository extends JpaRepository<ComplaintImage, UUID> {
     List<ComplaintImage> findByComplaintId(UUID complaintId);
+    List<ComplaintImage> findBySha256Hash(String sha256Hash);
+    boolean existsBySha256Hash(String sha256Hash);
 }

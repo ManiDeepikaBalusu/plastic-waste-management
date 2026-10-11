@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { complaintsApi } from '../../api/client';
 import MapView from '../../components/MapView';
-import { Camera, MapPin, AlertCircle, CheckCircle, Upload, X, ArrowRight } from 'lucide-react';
+import InAppCameraCapture from '../../components/InAppCameraCapture';
+import { Camera, MapPin, AlertCircle, CheckCircle, Upload, X, ArrowRight, ShieldCheck } from 'lucide-react';
 
 export default function ReportWastePage() {
   const navigate = useNavigate();
@@ -16,6 +17,8 @@ export default function ReportWastePage() {
   const [longitude, setLongitude] = useState('77.594562');
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [previews, setPreviews] = useState([]);
+  const [deviceMetadata, setDeviceMetadata] = useState(null);
+  const [showCamera, setShowCamera] = useState(false);
 
   const [gettingLocation, setGettingLocation] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -98,6 +101,31 @@ export default function ReportWastePage() {
     setPreviews((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const handlePhotoCaptured = (captured) => {
+    if (selectedFiles.length >= 5) {
+      setErrorMsg('You can upload a maximum of 5 images per complaint.');
+      setShowCamera(false);
+      return;
+    }
+    setSelectedFiles((prev) => [...prev, captured.file]);
+    setPreviews((prev) => [...prev, captured.previewUrl]);
+
+    setDeviceMetadata({
+      deviceLatitude: captured.deviceLatitude,
+      deviceLongitude: captured.deviceLongitude,
+      deviceCapturedAt: captured.deviceCapturedAt,
+      captureSource: captured.captureSource
+    });
+
+    if (captured.deviceLatitude && captured.deviceLongitude) {
+      setLatitude(Number(captured.deviceLatitude).toFixed(6));
+      setLongitude(Number(captured.deviceLongitude).toFixed(6));
+      setSuccessMsg('Photo captured and report coordinates synchronized with GPS!');
+      setTimeout(() => setSuccessMsg(''), 4000);
+    }
+    setShowCamera(false);
+  };
+
   // Submit Handler
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -142,7 +170,11 @@ export default function ReportWastePage() {
         estimatedSize,
         latitude: latNum,
         longitude: lngNum,
-        addressText: addressText.trim() || undefined
+        addressText: addressText.trim() || undefined,
+        deviceLatitude: deviceMetadata?.deviceLatitude ? parseFloat(deviceMetadata.deviceLatitude) : undefined,
+        deviceLongitude: deviceMetadata?.deviceLongitude ? parseFloat(deviceMetadata.deviceLongitude) : undefined,
+        deviceCapturedAt: deviceMetadata?.deviceCapturedAt || undefined,
+        captureSource: deviceMetadata?.captureSource || 'GALLERY_UPLOAD'
       };
 
       const result = await complaintsApi.submitWithPhotos(dataPayload, selectedFiles);
@@ -393,44 +425,90 @@ export default function ReportWastePage() {
 
           {/* Photo Upload & Thumbnails */}
           <div>
-            <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '0.4rem' }}>
-              Proof Photos (Max 5 photos, JPG/PNG/WEBP, up to 10MB each) *
-            </label>
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              multiple
-              onChange={handleFileChange}
-              id="report-photo-picker"
-              style={{ display: 'none' }}
-            />
-            <label
-              htmlFor="report-photo-picker"
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '0.5rem',
-                padding: '2rem',
-                borderRadius: 'var(--radius-sm)',
-                border: '2px dashed rgba(16, 185, 129, 0.4)',
-                background: 'rgba(16, 185, 129, 0.04)',
-                cursor: 'pointer',
-                color: '#34d399',
-                fontWeight: 600,
-                fontSize: '0.92rem'
-              }}
-            >
-              <Upload size={28} />
-              <span>Click to select or drag & drop proof photos</span>
-              <span style={{ fontSize: '0.78rem', color: 'var(--text-dim)', fontWeight: 400 }}>
-                Server verifies image binary headers with Cloudinary cloud storage
-              </span>
-            </label>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+              <label style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-muted)' }}>
+                Proof Photos (Max 5 photos, JPG/PNG/WEBP, up to 10MB each) *
+              </label>
+              {deviceMetadata?.deviceLatitude && (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                  padding: '0.2rem 0.6rem',
+                  borderRadius: '12px',
+                  background: 'rgba(16, 185, 129, 0.15)',
+                  border: '1px solid rgba(16, 185, 129, 0.3)',
+                  color: '#34d399',
+                  fontSize: '0.75rem',
+                  fontWeight: 600
+                }}>
+                  <ShieldCheck size={14} />
+                  GPS Attached: {Number(deviceMetadata.deviceLatitude).toFixed(4)}, {Number(deviceMetadata.deviceLongitude).toFixed(4)}
+                </div>
+              )}
+            </div>
+
+            {/* Action buttons for photo capture vs file select */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+              <button
+                type="button"
+                onClick={() => setShowCamera(true)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.5rem',
+                  padding: '1rem',
+                  borderRadius: 'var(--radius-sm)',
+                  border: '1px solid rgba(14, 165, 233, 0.4)',
+                  background: 'rgba(14, 165, 233, 0.1)',
+                  color: '#38bdf8',
+                  fontWeight: 600,
+                  fontSize: '0.9rem',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                <Camera size={20} />
+                <span>Take Live Photo (In-App Camera)</span>
+              </button>
+
+              <div>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  multiple
+                  onChange={handleFileChange}
+                  id="report-photo-picker"
+                  style={{ display: 'none' }}
+                />
+                <label
+                  htmlFor="report-photo-picker"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.5rem',
+                    padding: '1rem',
+                    borderRadius: 'var(--radius-sm)',
+                    border: '1px dashed rgba(16, 185, 129, 0.4)',
+                    background: 'rgba(16, 185, 129, 0.05)',
+                    color: '#34d399',
+                    fontWeight: 600,
+                    fontSize: '0.9rem',
+                    cursor: 'pointer',
+                    height: '100%',
+                    boxSizing: 'border-box'
+                  }}
+                >
+                  <Upload size={20} />
+                  <span>Choose from Device Files</span>
+                </label>
+              </div>
+            </div>
 
             {previews.length > 0 && (
-              <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginTop: '1rem' }}>
+              <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
                 {previews.map((url, idx) => (
                   <div
                     key={idx}
@@ -495,6 +573,13 @@ export default function ReportWastePage() {
             {!submitting && <ArrowRight size={18} />}
           </button>
         </form>
+
+        {showCamera && (
+          <InAppCameraCapture
+            onPhotoCaptured={handlePhotoCaptured}
+            onClose={() => setShowCamera(false)}
+          />
+        )}
       </div>
     </div>
   );

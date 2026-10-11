@@ -39,6 +39,9 @@ class ComplaintPhotoSubmissionSecurityTests {
     private ComplaintRepository complaintRepository;
 
     @Autowired
+    private VerificationResultRepository verificationResultRepository;
+
+    @Autowired
     private ComplaintImageRepository complaintImageRepository;
 
     @Autowired
@@ -62,6 +65,7 @@ class ComplaintPhotoSubmissionSecurityTests {
     void setUp() {
         notificationRepository.deleteAll();
         progressUpdateRepository.deleteAll();
+        verificationResultRepository.deleteAll();
         complaintImageRepository.deleteAll();
         complaintRepository.deleteAll();
         userRepository.deleteAll();

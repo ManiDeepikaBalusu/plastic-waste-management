@@ -13,6 +13,8 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.math.BigDecimal;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -86,8 +88,14 @@ public class AssignmentController {
             @PathVariable UUID id,
             @RequestParam(value = "notes", required = false) String notes,
             @RequestPart(value = "files", required = false) List<MultipartFile> files,
+            @RequestParam(value = "deviceLatitude", required = false) BigDecimal deviceLatitude,
+            @RequestParam(value = "deviceLongitude", required = false) BigDecimal deviceLongitude,
+            @RequestParam(value = "deviceCapturedAt", required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE_TIME) OffsetDateTime deviceCapturedAt,
+            @RequestParam(value = "captureSource", required = false) String captureSource,
             @AuthenticationPrincipal UserPrincipal volunteerUser) {
-        AssignmentResponse response = assignmentService.resolveAssignmentWithProof(id, notes, files, volunteerUser);
+        AssignmentResponse response = assignmentService.resolveAssignmentWithProof(
+                id, notes, files, deviceLatitude, deviceLongitude, deviceCapturedAt, captureSource, volunteerUser
+        );
         return ResponseEntity.ok(response);
     }
 }
