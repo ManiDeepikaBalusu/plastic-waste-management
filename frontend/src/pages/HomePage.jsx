@@ -10,6 +10,11 @@ export default function HomePage() {
   const [recentComplaints, setRecentComplaints] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  if (!authLoading && user) {
+    const dest = role === 'ADMIN' ? '/admin' : role === 'VOLUNTEER' ? '/volunteer' : '/citizen/complaints';
+    return <Navigate to={dest} replace />;
+  }
+
   useEffect(() => {
     async function loadPreview() {
       if (!user || role !== 'ADMIN') {

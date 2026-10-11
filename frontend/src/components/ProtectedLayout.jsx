@@ -36,8 +36,8 @@ export default function ProtectedLayout({ allowedRoles = [] }) {
           <Link to={defaultDashboard} className="service-btn">
             Go to My Dashboard
           </Link>
-          <Link to="/" className="service-btn" style={{ background: 'rgba(255, 255, 255, 0.05)', borderColor: 'var(--border-subtle)' }}>
-            Go to Home Page
+          <Link to="/login" className="service-btn" style={{ background: 'rgba(255, 255, 255, 0.05)', borderColor: 'var(--border-subtle)' }}>
+            Switch Account
           </Link>
         </div>
       </div>

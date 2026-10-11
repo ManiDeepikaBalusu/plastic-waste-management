@@ -11,11 +11,14 @@ export default function Navbar() {
 
   const handleLogout = async () => {
     await logout();
-    navigate('/', { replace: true });
+    navigate('/login', { replace: true });
   };
 
   const getHomeTarget = () => {
-    return '/';
+    if (!user) return '/';
+    if (role === 'ADMIN') return '/admin';
+    if (role === 'VOLUNTEER') return '/volunteer';
+    return '/citizen/complaints';
   };
 
   const isActive = (path) => location.pathname === path;
@@ -34,12 +37,14 @@ export default function Navbar() {
 
         {/* Desktop Nav Links */}
         <nav style={{ display: 'none', alignItems: 'center', gap: '1.25rem' }} className="desktop-nav">
-          <Link
-            to="/"
-            className={`nav-link ${isActive('/') ? 'active' : ''}`}
-          >
-            Home
-          </Link>
+          {!user && (
+            <Link
+              to="/"
+              className={`nav-link ${isActive('/') ? 'active' : ''}`}
+            >
+              Home
+            </Link>
+          )}
           {/* Citizen Links */}
           {(!role || role === 'CITIZEN') && (
             <>
@@ -105,12 +110,6 @@ export default function Navbar() {
               >
                 Assigned Tasks
               </Link>
-              <Link
-                to="/citizen/report"
-                className={`nav-link ${isActive('/citizen/report') ? 'active' : ''}`}
-              >
-                Report Waste
-              </Link>
             </>
           )}
 
@@ -157,7 +156,9 @@ export default function Navbar() {
       {/* Mobile Drawer */}
       {mobileMenuOpen && (
         <div className="mobile-drawer glass-panel">
-          <Link to="/" onClick={() => setMobileMenuOpen(false)}>Home</Link>
+          {!user && (
+            <Link to="/" onClick={() => setMobileMenuOpen(false)}>Home</Link>
+          )}
           {(!role || role === 'CITIZEN') && (
             <>
               <Link to="/citizen/report" onClick={() => setMobileMenuOpen(false)}>Report Waste</Link>

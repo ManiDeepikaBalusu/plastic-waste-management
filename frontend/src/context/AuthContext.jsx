@@ -71,7 +71,10 @@ export function AuthProvider({ children }) {
       console.warn('Logout endpoint error:', err);
     } finally {
       localStorage.removeItem('token');
+      localStorage.removeItem('jwt_token');
+      sessionStorage.clear();
       setUser(null);
+      setError(null);
     }
   };
 

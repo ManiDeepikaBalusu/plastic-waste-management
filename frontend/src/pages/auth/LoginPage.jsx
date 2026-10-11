@@ -15,8 +15,26 @@ export default function LoginPage() {
 
   const from = location.state?.from?.pathname;
 
+  const getRoleDashboard = (userRole) => {
+    if (userRole === 'ADMIN') return '/admin';
+    if (userRole === 'VOLUNTEER') return '/volunteer';
+    return '/citizen/complaints';
+  };
+
+  const isAllowedPath = (path, userRole) => {
+    if (!path || path === '/' || path === '/login' || path === '/register') return false;
+    if (userRole === 'ADMIN') return true;
+    if (userRole === 'VOLUNTEER') {
+      return path.startsWith('/volunteer');
+    }
+    if (userRole === 'CITIZEN') {
+      return path.startsWith('/citizen');
+    }
+    return false;
+  };
+
   if (!authLoading && isAuthenticated && user) {
-    const dest = from || (user.role === 'ADMIN' ? '/admin' : user.role === 'VOLUNTEER' ? '/volunteer' : '/citizen/complaints');
+    const dest = (from && isAllowedPath(from, user.role)) ? from : getRoleDashboard(user.role);
     return <Navigate to={dest} replace />;
   }
 
@@ -30,18 +48,10 @@ export default function LoginPage() {
     try {
       setLoading(true);
       setError(null);
-      const user = await login(email.trim(), password);
-
-      // Navigate based on role or prior target
-      if (from) {
-        navigate(from, { replace: true });
-      } else if (user.role === 'ADMIN') {
-        navigate('/admin');
-      } else if (user.role === 'VOLUNTEER') {
-        navigate('/volunteer');
-      } else {
-        navigate('/citizen/report');
-      }
+      const authenticatedUser = await login(email.trim(), password);
+      const role = authenticatedUser?.role;
+      const dest = (from && isAllowedPath(from, role)) ? from : getRoleDashboard(role);
+      navigate(dest, { replace: true });
     } catch (err) {
       setError(err.message || 'Invalid credentials or connection error.');
     } finally {
@@ -50,8 +60,16 @@ export default function LoginPage() {
   };
 
   const handleDemoFill = (demoEmail, demoRole) => {
-    setEmail(demoEmail);
-    setPassword('Pass123!');
+    if (demoRole === 'ADMIN') {
+      setEmail('admin@plasticwaste.org');
+      setPassword('AdminPassword2026!');
+    } else if (demoRole === 'VOLUNTEER') {
+      setEmail('volunteer@plasticwaste.org');
+      setPassword('VolunteerPassword2026!');
+    } else {
+      setEmail('citizena@test.org');
+      setPassword('Pass123!');
+    }
   };
 
   return (
