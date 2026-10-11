@@ -10,8 +10,9 @@ export default function Navbar() {
   const location = useLocation();
 
   const handleLogout = async () => {
+    setMobileMenuOpen(false);
+    navigate('/', { replace: true });
     await logout();
-    navigate('/login', { replace: true });
   };
 
   const getHomeTarget = () => {
@@ -45,8 +46,9 @@ export default function Navbar() {
               Home
             </Link>
           )}
-          {/* Citizen Links */}
-          {(!role || role === 'CITIZEN') && (
+
+          {/* Citizen Links: visible only to authenticated CITIZEN */}
+          {user && role === 'CITIZEN' && (
             <>
               <Link
                 to="/citizen/report"
@@ -54,19 +56,17 @@ export default function Navbar() {
               >
                 Report Waste
               </Link>
-              {user && (
-                <Link
-                  to="/citizen/complaints"
-                  className={`nav-link ${isActive('/citizen/complaints') ? 'active' : ''}`}
-                >
-                  My Complaints
-                </Link>
-              )}
+              <Link
+                to="/citizen/complaints"
+                className={`nav-link ${isActive('/citizen/complaints') ? 'active' : ''}`}
+              >
+                My Complaints
+              </Link>
             </>
           )}
 
-          {/* Admin Links */}
-          {role === 'ADMIN' && (
+          {/* Admin Links: visible only to authenticated ADMIN */}
+          {user && role === 'ADMIN' && (
             <>
               <Link
                 to="/admin"
@@ -95,8 +95,8 @@ export default function Navbar() {
             </>
           )}
 
-          {/* Volunteer Links */}
-          {role === 'VOLUNTEER' && (
+          {/* Volunteer Links: visible only to authenticated VOLUNTEER */}
+          {user && role === 'VOLUNTEER' && (
             <>
               <Link
                 to="/volunteer"
@@ -159,13 +159,13 @@ export default function Navbar() {
           {!user && (
             <Link to="/" onClick={() => setMobileMenuOpen(false)}>Home</Link>
           )}
-          {(!role || role === 'CITIZEN') && (
+          {user && role === 'CITIZEN' && (
             <>
               <Link to="/citizen/report" onClick={() => setMobileMenuOpen(false)}>Report Waste</Link>
-              {user && <Link to="/citizen/complaints" onClick={() => setMobileMenuOpen(false)}>My Complaints</Link>}
+              <Link to="/citizen/complaints" onClick={() => setMobileMenuOpen(false)}>My Complaints</Link>
             </>
           )}
-          {role === 'ADMIN' && (
+          {user && role === 'ADMIN' && (
             <>
               <Link to="/admin" onClick={() => setMobileMenuOpen(false)}>Admin Dashboard</Link>
               <Link to="/admin/complaints" onClick={() => setMobileMenuOpen(false)}>Manage Complaints</Link>
@@ -173,7 +173,7 @@ export default function Navbar() {
               <Link to="/admin/volunteers" onClick={() => setMobileMenuOpen(false)}>Volunteer Dispatch</Link>
             </>
           )}
-          {role === 'VOLUNTEER' && (
+          {user && role === 'VOLUNTEER' && (
             <>
               <Link to="/volunteer" onClick={() => setMobileMenuOpen(false)}>Volunteer Dashboard</Link>
               <Link to="/volunteer/tasks" onClick={() => setMobileMenuOpen(false)}>Assigned Cleanups</Link>

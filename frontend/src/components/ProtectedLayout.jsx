@@ -21,7 +21,7 @@ export default function ProtectedLayout({ allowedRoles = [] }) {
   }
 
   if (allowedRoles.length > 0 && !allowedRoles.includes(role)) {
-    const defaultDashboard = role === 'ADMIN' ? '/admin' : role === 'VOLUNTEER' ? '/volunteer/tasks' : '/citizen/complaints';
+    const defaultDashboard = role === 'ADMIN' ? '/admin' : role === 'VOLUNTEER' ? '/volunteer' : '/citizen/complaints';
 
     return (
       <div style={{ maxWidth: '600px', margin: '4rem auto', padding: '2rem' }} className="glass-panel">

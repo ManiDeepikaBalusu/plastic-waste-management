@@ -4,8 +4,20 @@ import { authApi } from '../api/client';
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(() => {
+    try {
+      const token = localStorage.getItem('token');
+      const savedUser = localStorage.getItem('user');
+      return token && savedUser ? JSON.parse(savedUser) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [loading, setLoading] = useState(() => {
+    const token = localStorage.getItem('token');
+    const savedUser = localStorage.getItem('user');
+    return !!token && !savedUser;
+  });
   const [error, setError] = useState(null);
 
   const checkAuth = useCallback(async () => {
@@ -17,17 +29,20 @@ export function AuthProvider({ children }) {
     }
 
     try {
-      setLoading(true);
       setError(null);
       const profile = await authApi.getMe();
       if (profile && profile.id) {
         setUser(profile);
+        localStorage.setItem('user', JSON.stringify(profile));
       } else {
-        setUser(null);
+        throw new Error('Invalid profile session');
       }
     } catch {
       // Not logged in or expired token
       localStorage.removeItem('token');
+      localStorage.removeItem('jwt_token');
+      localStorage.removeItem('user');
+      sessionStorage.clear();
       setUser(null);
     } finally {
       setLoading(false);
@@ -44,8 +59,12 @@ export function AuthProvider({ children }) {
       const res = await authApi.login({ email, password });
       if (res.token) {
         localStorage.setItem('token', res.token);
+        localStorage.setItem('jwt_token', res.token);
       }
-      setUser(res.user);
+      if (res.user) {
+        localStorage.setItem('user', JSON.stringify(res.user));
+        setUser(res.user);
+      }
       return res.user;
     } catch (err) {
       setError(err.message || 'Login failed');
@@ -72,6 +91,7 @@ export function AuthProvider({ children }) {
     } finally {
       localStorage.removeItem('token');
       localStorage.removeItem('jwt_token');
+      localStorage.removeItem('user');
       sessionStorage.clear();
       setUser(null);
       setError(null);
@@ -80,7 +100,7 @@ export function AuthProvider({ children }) {
 
   const value = {
     user,
-    role: user?.role || null,
+    role: user?.role ? user.role.toUpperCase() : null,
     isAuthenticated: !!user,
     loading,
     error,

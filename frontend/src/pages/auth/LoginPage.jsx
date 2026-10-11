@@ -23,12 +23,15 @@ export default function LoginPage() {
 
   const isAllowedPath = (path, userRole) => {
     if (!path || path === '/' || path === '/login' || path === '/register') return false;
-    if (userRole === 'ADMIN') return true;
-    if (userRole === 'VOLUNTEER') {
-      return path.startsWith('/volunteer');
+    const normalizedRole = userRole?.toUpperCase();
+    if (normalizedRole === 'ADMIN') {
+      return path.startsWith('/admin') && path !== '/admin';
     }
-    if (userRole === 'CITIZEN') {
-      return path.startsWith('/citizen');
+    if (normalizedRole === 'VOLUNTEER') {
+      return path.startsWith('/volunteer') && path !== '/volunteer';
+    }
+    if (normalizedRole === 'CITIZEN') {
+      return path.startsWith('/citizen') && path !== '/citizen/complaints';
     }
     return false;
   };
