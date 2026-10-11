@@ -92,6 +92,21 @@ public class VerificationResult {
     @Column(name = "admin_notes", columnDefinition = "TEXT")
     private String adminNotes;
 
+    @Column(name = "coordinate_source", length = 50)
+    private String coordinateSource;
+
+    @Column(name = "timestamp_source", length = 50)
+    private String timestampSource;
+
+    @Column(name = "device_gps_accuracy")
+    private Double deviceGpsAccuracy;
+
+    @Column(name = "ocr_watermark_text", columnDefinition = "TEXT")
+    private String ocrWatermarkText;
+
+    @Column(name = "ocr_watermark_status", length = 50)
+    private String ocrWatermarkStatus;
+
     @Column(name = "verified_at", nullable = false, updatable = false)
     private OffsetDateTime verifiedAt = OffsetDateTime.now();
 
@@ -174,4 +189,19 @@ public class VerificationResult {
 
     public OffsetDateTime getVerifiedAt() { return verifiedAt; }
     public void setVerifiedAt(OffsetDateTime verifiedAt) { this.verifiedAt = verifiedAt; }
+
+    public String getCoordinateSource() { return coordinateSource; }
+    public void setCoordinateSource(String coordinateSource) { this.coordinateSource = coordinateSource; }
+
+    public String getTimestampSource() { return timestampSource; }
+    public void setTimestampSource(String timestampSource) { this.timestampSource = timestampSource; }
+
+    public Double getDeviceGpsAccuracy() { return deviceGpsAccuracy; }
+    public void setDeviceGpsAccuracy(Double deviceGpsAccuracy) { this.deviceGpsAccuracy = deviceGpsAccuracy; }
+
+    public String getOcrWatermarkText() { return ocrWatermarkText; }
+    public void setOcrWatermarkText(String ocrWatermarkText) { this.ocrWatermarkText = ocrWatermarkText; }
+
+    public String getOcrWatermarkStatus() { return ocrWatermarkStatus; }
+    public void setOcrWatermarkStatus(String ocrWatermarkStatus) { this.ocrWatermarkStatus = ocrWatermarkStatus; }
 }

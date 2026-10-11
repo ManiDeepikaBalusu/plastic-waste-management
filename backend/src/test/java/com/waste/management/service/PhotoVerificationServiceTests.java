@@ -5,6 +5,7 @@ import com.waste.management.entity.*;
 import com.waste.management.repository.*;
 import com.waste.management.security.JwtTokenProvider;
 import com.waste.management.security.UserPrincipal;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -20,6 +21,9 @@ import java.time.OffsetDateTime;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -61,6 +65,12 @@ class PhotoVerificationServiceTests {
 
     @Autowired
     private PasswordEncoder passwordEncoder;
+
+    @Autowired
+    private NotificationService notificationService;
+
+    @Autowired
+    private ObjectMapper objectMapper;
 
     private User citizen;
     private User volunteer;
@@ -347,5 +357,185 @@ class PhotoVerificationServiceTests {
 
         // Same point distance must be 0
         assertEquals(0.0, distanceCalculator.calculateDistanceMeters(lat1, lon1, lat1, lon1), 0.001);
+    }
+
+    @Test
+    @DisplayName("9. EXIF GPS Available: Embedded coordinates match report site -> VERIFIED")
+    void testExifGpsPresentAndMatched() {
+        ExifMetadataExtractor mockExtractor = mock(ExifMetadataExtractor.class);
+        when(mockExtractor.extractMetadata(any(byte[].class))).thenReturn(
+                new ExtractedImageMetadata(
+                        new BigDecimal("12.971620"),
+                        new BigDecimal("77.594610"),
+                        OffsetDateTime.now().minusMinutes(5),
+                        "Sony",
+                        "Alpha 7",
+                        null,
+                        null,
+                        null,
+                        true,
+                        true,
+                        false
+                )
+        );
+
+        PhotoVerificationService customService = new PhotoVerificationService(
+                mockExtractor, distanceCalculator, complaintImageRepository,
+                verificationResultRepository, userRepository, assignmentRepository,
+                complaintRepository, progressUpdateRepository, notificationService,
+                volunteerProfileRepository, objectMapper
+        );
+
+        MockMultipartFile file = new MockMultipartFile("files", "with_exif.jpg", "image/jpeg", sampleJpegBytes);
+        ComplaintImage img = complaintImageRepository.save(
+                new ComplaintImage(testComplaint, "https://res.cloudinary.com/demo/exif.jpg", "exif_id", "INITIAL_PROOF", citizen)
+        );
+
+        // No device GPS provided; system relies entirely on valid EXIF GPS
+        PhotoVerificationResultDto result = customService.verifyInitialPhoto(
+                file, testComplaint, img, null, null, null, "CAMERA", citizen
+        );
+
+        assertEquals("VERIFIED", result.verificationStatus(), "Status should be VERIFIED based on EXIF GPS");
+        assertEquals("EXIF_HEADER", result.coordinateSource());
+        assertTrue(result.flags().stream().anyMatch(f -> f.contains("EXIF_GPS_PRESENT")));
+        assertTrue(result.flags().stream().anyMatch(f -> f.contains("DEVICE_GPS_NOT_PROVIDED")));
+        assertTrue(result.flags().stream().anyMatch(f -> f.contains("LOCATION_MATCHED")));
+        assertFalse(result.flags().stream().anyMatch(f -> f.contains("NO_GPS_COORDINATES")), "Should NOT claim NO_GPS_COORDINATES when EXIF GPS is present");
+    }
+
+    @Test
+    @DisplayName("10. Both GPS Sources Absent: Neither device GPS nor EXIF coordinates available -> NEEDS_REVIEW (No false claims)")
+    void testBothGpsSourcesAbsent() {
+        MockMultipartFile file = new MockMultipartFile("files", "no_gps_anywhere.jpg", "image/jpeg", sampleJpegBytes);
+        ComplaintImage img = complaintImageRepository.save(
+                new ComplaintImage(testComplaint, "https://res.cloudinary.com/demo/no_gps.jpg", "no_gps_id", "INITIAL_PROOF", citizen)
+        );
+
+        PhotoVerificationResultDto result = photoVerificationService.verifyInitialPhoto(
+                file, testComplaint, img, null, null, null, "FILE_UPLOAD", citizen
+        );
+
+        assertEquals("NEEDS_REVIEW", result.verificationStatus(), "Status should be NEEDS_REVIEW, not REJECTED");
+        assertEquals("NONE", result.coordinateSource());
+        assertTrue(result.flags().stream().anyMatch(f -> f.contains("EXIF_GPS_NOT_FOUND")), "Must report EXIF_GPS_NOT_FOUND");
+        assertTrue(result.flags().stream().anyMatch(f -> f.contains("DEVICE_GPS_NOT_PROVIDED")), "Must report DEVICE_GPS_NOT_PROVIDED");
+        assertTrue(result.flags().stream().anyMatch(f -> f.contains("NO_GPS_COORDINATES")), "Must report NO_GPS_COORDINATES");
+        assertFalse(result.flags().stream().anyMatch(f -> f.contains("evaluated using device GPS")), "Must NEVER claim evaluated using device GPS when device GPS is null");
+        assertFalse(result.flags().stream().anyMatch(f -> f.contains("DUPLICATE_IMAGE_DETECTED")), "Missing GPS is not duplicate fraud");
+    }
+
+    @Test
+    @DisplayName("11. Complaint Coordinates Separate from Photo GPS: Never copy complaint location into photo device GPS")
+    void testComplaintCoordinatesSeparateFromPhotoGps() {
+        MockMultipartFile file = new MockMultipartFile("files", "separate_coords.jpg", "image/jpeg", sampleJpegBytes);
+        ComplaintImage img = complaintImageRepository.save(
+                new ComplaintImage(testComplaint, "https://res.cloudinary.com/demo/separate.jpg", "separate_id", "INITIAL_PROOF", citizen)
+        );
+
+        // Complaint has valid target coordinates (12.9716, 77.5946), but photo has no device coordinates
+        PhotoVerificationResultDto result = photoVerificationService.verifyInitialPhoto(
+                file, testComplaint, img, null, null, null, "FILE_UPLOAD", citizen
+        );
+
+        assertNull(result.deviceLatitude(), "Photo device latitude must remain null, never fabricated from complaint");
+        assertNull(result.deviceLongitude(), "Photo device longitude must remain null, never fabricated from complaint");
+        assertEquals("NEEDS_REVIEW", result.verificationStatus());
+        assertTrue(result.flags().stream().anyMatch(f -> f.contains("NO_GPS_COORDINATES")));
+    }
+
+    @Test
+    @DisplayName("12. File Modification Time Present without Genuine Capture Timestamp: Distinguishes file metadata from camera capture")
+    void testFileLastModifiedWithoutGenuineCaptureTimestamp() {
+        MockMultipartFile file = new MockMultipartFile("files", "file_mod.jpg", "image/jpeg", sampleJpegBytes);
+        ComplaintImage img = complaintImageRepository.save(
+                new ComplaintImage(testComplaint, "https://res.cloudinary.com/demo/file_mod.jpg", "mod_id", "INITIAL_PROOF", citizen)
+        );
+
+        OffsetDateTime fileModTime = OffsetDateTime.now().minusHours(3);
+
+        PhotoVerificationResultDto result = photoVerificationService.verifyInitialPhoto(
+                file, testComplaint, img,
+                new BigDecimal("12.971610"), new BigDecimal("77.594610"),
+                null, // deviceCapturedAt is explicitly null (uploaded file)
+                "GALLERY_UPLOAD",
+                15.0, // deviceAccuracy
+                null, // deviceGpsTimestamp
+                fileModTime, // fileLastModifiedAt
+                citizen
+        );
+
+        assertTrue(result.flags().stream().anyMatch(f -> f.contains("FILE_MODIFICATION_TIME_RECORDED")), "Should record file modification timestamp");
+        assertTrue(result.flags().stream().anyMatch(f -> f.contains("TIMESTAMP_NOT_PROVIDED")), "Should indicate no genuine capture timestamp was recorded");
+        assertFalse(result.flags().stream().anyMatch(f -> f.contains("using upload time as capture time")), "Should not claim upload time was original capture time");
+    }
+
+    @Test
+    @DisplayName("13. Valid Captured Timestamp with Identified Source: Identifies DEVICE_CAMERA_CAPTURE")
+    void testValidCapturedTimestampWithIdentifiedSource() {
+        MockMultipartFile file = new MockMultipartFile("files", "captured.jpg", "image/jpeg", sampleJpegBytes);
+        ComplaintImage img = complaintImageRepository.save(
+                new ComplaintImage(testComplaint, "https://res.cloudinary.com/demo/captured.jpg", "cap_id", "INITIAL_PROOF", citizen)
+        );
+
+        OffsetDateTime liveCameraSnapTime = OffsetDateTime.now().minusMinutes(2);
+
+        PhotoVerificationResultDto result = photoVerificationService.verifyInitialPhoto(
+                file, testComplaint, img,
+                new BigDecimal("12.971610"), new BigDecimal("77.594610"),
+                liveCameraSnapTime,
+                "IN_APP_CAMERA",
+                5.0,
+                liveCameraSnapTime,
+                null,
+                citizen
+        );
+
+        assertEquals("DEVICE_CAMERA_CAPTURE", result.timestampSource());
+        assertTrue(result.flags().stream().anyMatch(f -> f.contains("TIMESTAMP_VALID") && f.contains("DEVICE_CAMERA_CAPTURE")));
+    }
+
+    @Test
+    @DisplayName("14. GPS Map Camera Filename without EXIF GPS: Flags VISIBLE_GPS_WATERMARK_NOT_MACHINE_VERIFIED")
+    void testGpsMapCameraFilenameWithoutExifGps() {
+        MockMultipartFile file = new MockMultipartFile(
+                "files",
+                "GPSMapCamera_20261011_153022.jpg",
+                "image/jpeg",
+                sampleJpegBytes
+        );
+        ComplaintImage img = complaintImageRepository.save(
+                new ComplaintImage(testComplaint, "https://res.cloudinary.com/demo/watermark.jpg", "watermark_id", "INITIAL_PROOF", citizen)
+        );
+
+        PhotoVerificationResultDto result = photoVerificationService.verifyInitialPhoto(
+                file, testComplaint, img, null, null, null, "GPS_MAP_CAMERA_FILE", citizen
+        );
+
+        assertEquals("NEEDS_REVIEW", result.verificationStatus(), "Should be flagged for Admin review, not rejected");
+        assertTrue(result.flags().stream().anyMatch(f -> f.contains("VISIBLE_GPS_WATERMARK_NOT_MACHINE_VERIFIED")), "Must flag visible watermark not machine verified");
+        assertTrue(result.flags().stream().anyMatch(f -> f.contains("EXIF_GPS_NOT_FOUND")), "Must report EXIF_GPS_NOT_FOUND");
+        assertFalse(result.flags().stream().anyMatch(f -> f.contains("evaluated using device GPS")), "Must not claim device GPS was evaluated");
+    }
+
+    @Test
+    @DisplayName("15. Missing Metadata Results in Review Rather than Automatic Fraud Rejection")
+    void testMissingMetadataResultsInReviewNotFraudRejection() {
+        MockMultipartFile file = new MockMultipartFile("files", "stripped_web.jpg", "image/jpeg", sampleJpegBytes);
+        ComplaintImage img = complaintImageRepository.save(
+                new ComplaintImage(testComplaint, "https://res.cloudinary.com/demo/stripped.jpg", "stripped_id", "INITIAL_PROOF", citizen)
+        );
+
+        PhotoVerificationResultDto result = photoVerificationService.verifyInitialPhoto(
+                file, testComplaint, img, null, null, null, "FILE_UPLOAD", citizen
+        );
+
+        assertEquals("NEEDS_REVIEW", result.verificationStatus(), "Missing metadata must result in review, not rejection");
+        assertNotEquals("REJECTED", result.verificationStatus(), "Missing metadata must NEVER be automatically labeled REJECTED");
+
+        List<VerificationResult> audits = verificationResultRepository.findByComplaintIdOrderByVerifiedAtDesc(testComplaint.getId());
+        assertFalse(audits.isEmpty());
+        assertEquals("NEEDS_REVIEW", audits.get(0).getVerificationStatus());
+        assertEquals("PENDING", audits.get(0).getReviewDecision(), "Admin review must be PENDING");
     }
 }

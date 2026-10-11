@@ -142,7 +142,8 @@ export default function InAppCameraCapture({ onPhotoCaptured, onClose, mode = 'm
     setCapturedImage({
       file,
       previewUrl,
-      timestamp: new Date().toISOString(),
+      timestamp: null, // Uploaded file fallback: do not fabricate capture timestamp
+      fileLastModifiedAt: file.lastModified ? new Date(file.lastModified).toISOString() : null,
       coords: coords ? { ...coords } : null,
       accuracy,
       source: 'DEVICE_FILE_CAPTURE'
@@ -158,7 +159,10 @@ export default function InAppCameraCapture({ onPhotoCaptured, onClose, mode = 'm
       previewUrl: capturedImage.previewUrl,
       deviceLatitude: capturedImage.coords?.latitude || null,
       deviceLongitude: capturedImage.coords?.longitude || null,
-      deviceCapturedAt: capturedImage.timestamp,
+      deviceAccuracy: capturedImage.accuracy || null,
+      deviceCapturedAt: capturedImage.timestamp || null,
+      deviceGpsTimestamp: capturedImage.coords ? new Date().toISOString() : null,
+      fileLastModifiedAt: capturedImage.fileLastModifiedAt || null,
       captureSource: capturedImage.source
     })
 

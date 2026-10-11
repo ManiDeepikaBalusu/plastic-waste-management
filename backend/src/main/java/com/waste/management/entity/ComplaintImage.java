@@ -76,6 +76,27 @@ public class ComplaintImage {
     @Column(name = "capture_source", nullable = false, length = 40)
     private String captureSource = "CAMERA"; // CAMERA, FILE_UPLOAD
 
+    @Column(name = "file_last_modified_at")
+    private OffsetDateTime fileLastModifiedAt;
+
+    @Column(name = "device_gps_accuracy")
+    private Double deviceGpsAccuracy;
+
+    @Column(name = "device_gps_timestamp")
+    private OffsetDateTime deviceGpsTimestamp;
+
+    @Column(name = "coordinate_source", length = 50)
+    private String coordinateSource;
+
+    @Column(name = "timestamp_source", length = 50)
+    private String timestampSource;
+
+    @Column(name = "ocr_watermark_text", columnDefinition = "TEXT")
+    private String ocrWatermarkText;
+
+    @Column(name = "ocr_watermark_status", length = 50)
+    private String ocrWatermarkStatus;
+
     public ComplaintImage() {}
 
     public ComplaintImage(Complaint complaint, String imageUrl, String publicId, String imageType, User uploadedBy) {
@@ -149,4 +170,25 @@ public class ComplaintImage {
 
     public String getCaptureSource() { return captureSource; }
     public void setCaptureSource(String captureSource) { this.captureSource = captureSource; }
+
+    public OffsetDateTime getFileLastModifiedAt() { return fileLastModifiedAt; }
+    public void setFileLastModifiedAt(OffsetDateTime fileLastModifiedAt) { this.fileLastModifiedAt = fileLastModifiedAt; }
+
+    public Double getDeviceGpsAccuracy() { return deviceGpsAccuracy; }
+    public void setDeviceGpsAccuracy(Double deviceGpsAccuracy) { this.deviceGpsAccuracy = deviceGpsAccuracy; }
+
+    public OffsetDateTime getDeviceGpsTimestamp() { return deviceGpsTimestamp; }
+    public void setDeviceGpsTimestamp(OffsetDateTime deviceGpsTimestamp) { this.deviceGpsTimestamp = deviceGpsTimestamp; }
+
+    public String getCoordinateSource() { return coordinateSource; }
+    public void setCoordinateSource(String coordinateSource) { this.coordinateSource = coordinateSource; }
+
+    public String getTimestampSource() { return timestampSource; }
+    public void setTimestampSource(String timestampSource) { this.timestampSource = timestampSource; }
+
+    public String getOcrWatermarkText() { return ocrWatermarkText; }
+    public void setOcrWatermarkText(String ocrWatermarkText) { this.ocrWatermarkText = ocrWatermarkText; }
+
+    public String getOcrWatermarkStatus() { return ocrWatermarkStatus; }
+    public void setOcrWatermarkStatus(String ocrWatermarkStatus) { this.ocrWatermarkStatus = ocrWatermarkStatus; }
 }

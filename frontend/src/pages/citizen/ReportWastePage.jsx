@@ -70,6 +70,8 @@ export default function ReportWastePage() {
     const validFiles = [];
     const validPreviews = [];
     let hasError = false;
+    let isGpsMapCamera = false;
+    let fileModTime = null;
 
     files.forEach((file) => {
       if (file.size > 10 * 1024 * 1024) {
@@ -85,6 +87,16 @@ export default function ReportWastePage() {
         return;
       }
 
+      if (file.name.toLowerCase().includes('gpsmapcamera') ||
+          file.name.toLowerCase().includes('gps_map_camera') ||
+          file.name.toLowerCase().includes('gps camera')) {
+        isGpsMapCamera = true;
+      }
+
+      if (file.lastModified && !fileModTime) {
+        fileModTime = new Date(file.lastModified).toISOString();
+      }
+
       validFiles.push(file);
       validPreviews.push(URL.createObjectURL(file));
     });
@@ -93,6 +105,47 @@ export default function ReportWastePage() {
       setErrorMsg('');
       setSelectedFiles((prev) => [...prev, ...validFiles]);
       setPreviews((prev) => [...prev, ...validPreviews]);
+
+      const defaultSource = isGpsMapCamera ? 'GPS_MAP_CAMERA_FILE' : 'GALLERY_UPLOAD';
+
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            setDeviceMetadata({
+              deviceLatitude: pos.coords.latitude,
+              deviceLongitude: pos.coords.longitude,
+              deviceAccuracy: pos.coords.accuracy,
+              deviceGpsTimestamp: new Date(pos.timestamp || Date.now()).toISOString(),
+              deviceCapturedAt: null, // Preserved null: file uploads do not fabricate capture time
+              fileLastModifiedAt: fileModTime,
+              captureSource: defaultSource
+            });
+          },
+          () => {
+            // Gracefully handle denied permission or unavailable GPS without blocking
+            setDeviceMetadata({
+              deviceLatitude: null,
+              deviceLongitude: null,
+              deviceAccuracy: null,
+              deviceGpsTimestamp: null,
+              deviceCapturedAt: null,
+              fileLastModifiedAt: fileModTime,
+              captureSource: defaultSource
+            });
+          },
+          { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
+        );
+      } else {
+        setDeviceMetadata({
+          deviceLatitude: null,
+          deviceLongitude: null,
+          deviceAccuracy: null,
+          deviceGpsTimestamp: null,
+          deviceCapturedAt: null,
+          fileLastModifiedAt: fileModTime,
+          captureSource: defaultSource
+        });
+      }
     }
   };
 
@@ -113,7 +166,10 @@ export default function ReportWastePage() {
     setDeviceMetadata({
       deviceLatitude: captured.deviceLatitude,
       deviceLongitude: captured.deviceLongitude,
+      deviceAccuracy: captured.deviceAccuracy,
       deviceCapturedAt: captured.deviceCapturedAt,
+      deviceGpsTimestamp: captured.deviceGpsTimestamp,
+      fileLastModifiedAt: captured.fileLastModifiedAt,
       captureSource: captured.captureSource
     });
 
@@ -171,10 +227,13 @@ export default function ReportWastePage() {
         latitude: latNum,
         longitude: lngNum,
         addressText: addressText.trim() || undefined,
-        deviceLatitude: deviceMetadata?.deviceLatitude ? parseFloat(deviceMetadata.deviceLatitude) : undefined,
-        deviceLongitude: deviceMetadata?.deviceLongitude ? parseFloat(deviceMetadata.deviceLongitude) : undefined,
+        deviceLatitude: deviceMetadata?.deviceLatitude != null ? parseFloat(deviceMetadata.deviceLatitude) : undefined,
+        deviceLongitude: deviceMetadata?.deviceLongitude != null ? parseFloat(deviceMetadata.deviceLongitude) : undefined,
         deviceCapturedAt: deviceMetadata?.deviceCapturedAt || undefined,
-        captureSource: deviceMetadata?.captureSource || 'GALLERY_UPLOAD'
+        captureSource: deviceMetadata?.captureSource || 'GALLERY_UPLOAD',
+        deviceAccuracy: deviceMetadata?.deviceAccuracy != null ? parseFloat(deviceMetadata.deviceAccuracy) : undefined,
+        deviceGpsTimestamp: deviceMetadata?.deviceGpsTimestamp || undefined,
+        fileLastModifiedAt: deviceMetadata?.fileLastModifiedAt || undefined
       };
 
       const result = await complaintsApi.submitWithPhotos(dataPayload, selectedFiles);

@@ -47,6 +47,7 @@ export default function CitizenComplaintForm({ onComplaintSubmitted }) {
   }
 
   // File Picker Handler with Client-side Magic/MIME & Size Validation
+  // File Picker Handler with Client-side Magic/MIME & Size Validation
   const handleFileChange = (e) => {
     const files = Array.from(e.target.files)
     if (!files.length) return
@@ -59,6 +60,8 @@ export default function CitizenComplaintForm({ onComplaintSubmitted }) {
     const validFiles = []
     const validPreviews = []
     let hasError = false
+    let isGpsMapCamera = false
+    let fileModTime = null
 
     files.forEach((file) => {
       // 10 MB limit
@@ -75,6 +78,16 @@ export default function CitizenComplaintForm({ onComplaintSubmitted }) {
         return
       }
 
+      if (file.name.toLowerCase().includes('gpsmapcamera') ||
+          file.name.toLowerCase().includes('gps_map_camera') ||
+          file.name.toLowerCase().includes('gps camera')) {
+        isGpsMapCamera = true
+      }
+
+      if (file.lastModified && !fileModTime) {
+        fileModTime = new Date(file.lastModified).toISOString()
+      }
+
       validFiles.push(file)
       validPreviews.push(URL.createObjectURL(file))
     })
@@ -83,6 +96,47 @@ export default function CitizenComplaintForm({ onComplaintSubmitted }) {
       setErrorMsg('')
       setSelectedFiles((prev) => [...prev, ...validFiles])
       setPreviews((prev) => [...prev, ...validPreviews])
+
+      const defaultSource = isGpsMapCamera ? 'GPS_MAP_CAMERA_FILE' : 'GALLERY_UPLOAD'
+
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            setDeviceMetadata({
+              deviceLatitude: pos.coords.latitude,
+              deviceLongitude: pos.coords.longitude,
+              deviceAccuracy: pos.coords.accuracy,
+              deviceGpsTimestamp: new Date(pos.timestamp || Date.now()).toISOString(),
+              deviceCapturedAt: null, // Preserved null: file uploads do not fabricate capture time
+              fileLastModifiedAt: fileModTime,
+              captureSource: defaultSource
+            })
+          },
+          () => {
+            // Gracefully handle denied permission or unavailable GPS without blocking
+            setDeviceMetadata({
+              deviceLatitude: null,
+              deviceLongitude: null,
+              deviceAccuracy: null,
+              deviceGpsTimestamp: null,
+              deviceCapturedAt: null,
+              fileLastModifiedAt: fileModTime,
+              captureSource: defaultSource
+            })
+          },
+          { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
+        )
+      } else {
+        setDeviceMetadata({
+          deviceLatitude: null,
+          deviceLongitude: null,
+          deviceAccuracy: null,
+          deviceGpsTimestamp: null,
+          deviceCapturedAt: null,
+          fileLastModifiedAt: fileModTime,
+          captureSource: defaultSource
+        })
+      }
     }
   }
 
@@ -96,15 +150,19 @@ export default function CitizenComplaintForm({ onComplaintSubmitted }) {
     setSelectedFiles((prev) => [...prev, capture.file])
     setPreviews((prev) => [...prev, capture.previewUrl])
 
+    setDeviceMetadata({
+      deviceLatitude: capture.deviceLatitude || null,
+      deviceLongitude: capture.deviceLongitude || null,
+      deviceAccuracy: capture.deviceAccuracy || null,
+      deviceCapturedAt: capture.deviceCapturedAt || null,
+      deviceGpsTimestamp: capture.deviceGpsTimestamp || null,
+      fileLastModifiedAt: capture.fileLastModifiedAt || null,
+      captureSource: capture.captureSource
+    })
+
     if (capture.deviceLatitude && capture.deviceLongitude) {
       setLatitude(capture.deviceLatitude.toFixed(7))
       setLongitude(capture.deviceLongitude.toFixed(7))
-      setDeviceMetadata({
-        deviceLatitude: capture.deviceLatitude,
-        deviceLongitude: capture.deviceLongitude,
-        deviceCapturedAt: capture.deviceCapturedAt,
-        captureSource: capture.captureSource
-      })
       setSuccessMsg('Live in-app photo captured with verified GPS coordinates attached!')
       setTimeout(() => setSuccessMsg(''), 4000)
     }
@@ -153,12 +211,13 @@ export default function CitizenComplaintForm({ onComplaintSubmitted }) {
         latitude: latNum,
         longitude: lngNum,
         addressText: addressText.trim(),
-        ...(deviceMetadata ? {
-          deviceLatitude: deviceMetadata.deviceLatitude,
-          deviceLongitude: deviceMetadata.deviceLongitude,
-          deviceCapturedAt: deviceMetadata.deviceCapturedAt,
-          captureSource: deviceMetadata.captureSource
-        } : {})
+        deviceLatitude: deviceMetadata?.deviceLatitude != null ? parseFloat(deviceMetadata.deviceLatitude) : undefined,
+        deviceLongitude: deviceMetadata?.deviceLongitude != null ? parseFloat(deviceMetadata.deviceLongitude) : undefined,
+        deviceCapturedAt: deviceMetadata?.deviceCapturedAt || undefined,
+        captureSource: deviceMetadata?.captureSource || 'GALLERY_UPLOAD',
+        deviceAccuracy: deviceMetadata?.deviceAccuracy != null ? parseFloat(deviceMetadata.deviceAccuracy) : undefined,
+        deviceGpsTimestamp: deviceMetadata?.deviceGpsTimestamp || undefined,
+        fileLastModifiedAt: deviceMetadata?.fileLastModifiedAt || undefined
       }
 
       formData.append(

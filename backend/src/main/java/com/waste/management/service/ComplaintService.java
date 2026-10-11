@@ -115,6 +115,9 @@ public class ComplaintService {
                     request.deviceLongitude(),
                     request.deviceCapturedAt(),
                     request.captureSource(),
+                    request.deviceAccuracy(),
+                    request.deviceGpsTimestamp(),
+                    request.fileLastModifiedAt(),
                     citizen
             );
 

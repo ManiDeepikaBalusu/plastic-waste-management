@@ -79,11 +79,34 @@ public class ExifMetadataExtractor {
                 }
             }
 
-            // 3. Extract Camera Make & Model
+            // 3. Extract Camera Make, Model, Software & Image Description
+            String software = null;
+            String imageDescription = null;
             ExifIFD0Directory ifd0 = metadata.getFirstDirectoryOfType(ExifIFD0Directory.class);
             if (ifd0 != null) {
                 cameraMake = ifd0.getString(ExifIFD0Directory.TAG_MAKE);
                 cameraModel = ifd0.getString(ExifIFD0Directory.TAG_MODEL);
+                software = ifd0.getString(ExifIFD0Directory.TAG_SOFTWARE);
+                imageDescription = ifd0.getString(ExifIFD0Directory.TAG_IMAGE_DESCRIPTION);
+            }
+
+            // 4. Extract User Comment
+            String userComment = null;
+            ExifSubIFDDirectory subIFDForComment = metadata.getFirstDirectoryOfType(ExifSubIFDDirectory.class);
+            if (subIFDForComment != null) {
+                userComment = subIFDForComment.getDescription(ExifSubIFDDirectory.TAG_USER_COMMENT);
+            }
+
+            boolean hasWatermarkIndicator = false;
+            String combined = ((software != null ? software : "") + " " +
+                               (imageDescription != null ? imageDescription : "") + " " +
+                               (userComment != null ? userComment : "")).toLowerCase();
+            if (combined.contains("gps map camera") ||
+                combined.contains("gpsmapcamera") ||
+                combined.contains("timestamp camera") ||
+                combined.contains("watermark") ||
+                combined.contains("geotag")) {
+                hasWatermarkIndicator = true;
             }
 
             return new ExtractedImageMetadata(
@@ -92,8 +115,12 @@ public class ExifMetadataExtractor {
                     exifCapturedAt,
                     cameraMake,
                     cameraModel,
+                    software,
+                    imageDescription,
+                    userComment,
                     hasGps,
-                    hasDate
+                    hasDate,
+                    hasWatermarkIndicator
             );
 
         } catch (Exception ex) {

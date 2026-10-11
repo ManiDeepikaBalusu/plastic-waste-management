@@ -47,13 +47,13 @@ public class PhotoVerificationService {
     private final ObjectMapper objectMapper;
 
     @Value("${app.verification.location-tolerance-meters:200.0}")
-    private double locationToleranceMeters;
+    private double locationToleranceMeters = 200.0;
 
     @Value("${app.verification.cleanup-tolerance-meters:200.0}")
-    private double cleanupToleranceMeters;
+    private double cleanupToleranceMeters = 200.0;
 
     @Value("${app.verification.time-tolerance-hours:24}")
-    private long timeToleranceHours;
+    private long timeToleranceHours = 24;
 
     public PhotoVerificationService(
             ExifMetadataExtractor exifExtractor,
@@ -94,6 +94,23 @@ public class PhotoVerificationService {
             String captureSource,
             User citizen) {
 
+        return verifyInitialPhoto(file, complaint, complaintImage, deviceLat, deviceLon, deviceCapturedAt, captureSource, null, null, null, citizen);
+    }
+
+    @Transactional
+    public PhotoVerificationResultDto verifyInitialPhoto(
+            MultipartFile file,
+            Complaint complaint,
+            ComplaintImage complaintImage,
+            BigDecimal deviceLat,
+            BigDecimal deviceLon,
+            OffsetDateTime deviceCapturedAt,
+            String captureSource,
+            Double deviceAccuracy,
+            OffsetDateTime deviceGpsTimestamp,
+            OffsetDateTime fileLastModifiedAt,
+            User citizen) {
+
         return evaluateAndRecord(
                 file,
                 complaint,
@@ -105,6 +122,9 @@ public class PhotoVerificationService {
                 deviceLon,
                 deviceCapturedAt,
                 captureSource,
+                deviceAccuracy,
+                deviceGpsTimestamp,
+                fileLastModifiedAt,
                 "INITIAL_REPORT",
                 locationToleranceMeters,
                 citizen
@@ -126,6 +146,24 @@ public class PhotoVerificationService {
             String captureSource,
             User volunteer) {
 
+        return verifyCleanupPhoto(file, complaint, assignment, complaintImage, deviceLat, deviceLon, deviceCapturedAt, captureSource, null, null, null, volunteer);
+    }
+
+    @Transactional
+    public PhotoVerificationResultDto verifyCleanupPhoto(
+            MultipartFile file,
+            Complaint complaint,
+            Assignment assignment,
+            ComplaintImage complaintImage,
+            BigDecimal deviceLat,
+            BigDecimal deviceLon,
+            OffsetDateTime deviceCapturedAt,
+            String captureSource,
+            Double deviceAccuracy,
+            OffsetDateTime deviceGpsTimestamp,
+            OffsetDateTime fileLastModifiedAt,
+            User volunteer) {
+
         return evaluateAndRecord(
                 file,
                 complaint,
@@ -137,6 +175,9 @@ public class PhotoVerificationService {
                 deviceLon,
                 deviceCapturedAt,
                 captureSource,
+                deviceAccuracy,
+                deviceGpsTimestamp,
+                fileLastModifiedAt,
                 "CLEANUP_RESOLUTION",
                 cleanupToleranceMeters,
                 volunteer
@@ -154,6 +195,9 @@ public class PhotoVerificationService {
             BigDecimal deviceLon,
             OffsetDateTime deviceCapturedAt,
             String captureSource,
+            Double deviceAccuracy,
+            OffsetDateTime deviceGpsTimestamp,
+            OffsetDateTime fileLastModifiedAt,
             String checkType,
             double toleranceMeters,
             User actor) {
@@ -185,13 +229,31 @@ public class PhotoVerificationService {
         ExtractedImageMetadata exif = exifExtractor.extractMetadata(fileBytes);
 
         // 4. Coordinates & Distance Calculations
-        // Effective coordinates: prefer device coordinates if provided, else fallback to EXIF GPS
-        BigDecimal effectiveLat = deviceLat != null ? deviceLat : exif.exifLatitude();
-        BigDecimal effectiveLon = deviceLon != null ? deviceLon : exif.exifLongitude();
+        boolean hasDeviceGps = (deviceLat != null && deviceLon != null);
+        boolean hasExifGps = exif.hasExifGps();
 
-        Double distToReport = distanceCalculator.calculateDistanceMeters(effectiveLat, effectiveLon, targetLat, targetLon);
+        String coordinateSource;
+        if (hasDeviceGps && hasExifGps) {
+            coordinateSource = "DEVICE_AND_EXIF_GPS";
+        } else if (hasDeviceGps) {
+            coordinateSource = "DEVICE_GEOLOCATION";
+        } else if (hasExifGps) {
+            coordinateSource = "EXIF_HEADER";
+        } else {
+            coordinateSource = "NONE";
+        }
+
+        // Effective coordinates: prefer device coordinates if provided, else fallback to EXIF GPS
+        BigDecimal effectiveLat = hasDeviceGps ? deviceLat : exif.exifLatitude();
+        BigDecimal effectiveLon = hasDeviceGps ? deviceLon : exif.exifLongitude();
+
+        Double distToReport = null;
+        if (effectiveLat != null && effectiveLon != null && targetLat != null && targetLon != null) {
+            distToReport = distanceCalculator.calculateDistanceMeters(effectiveLat, effectiveLon, targetLat, targetLon);
+        }
+
         Double distDeviceToExif = null;
-        if (deviceLat != null && exif.exifLatitude() != null) {
+        if (hasDeviceGps && exif.exifLatitude() != null && exif.exifLongitude() != null) {
             distDeviceToExif = distanceCalculator.calculateDistanceMeters(deviceLat, deviceLon, exif.exifLatitude(), exif.exifLongitude());
         }
 
@@ -199,25 +261,66 @@ public class PhotoVerificationService {
         List<String> flags = new ArrayList<>();
         OffsetDateTime now = OffsetDateTime.now();
 
+        // 5.1 Duplicate Check
         if (isDuplicate) {
             flags.add("DUPLICATE_IMAGE_DETECTED: SHA-256 matches previously uploaded photo (" + sha256.substring(0, 12) + "...)");
         } else {
             flags.add("UNIQUE_IMAGE_HASH: No duplicate file hash detected");
         }
 
-        if (exif.hasExifGps()) {
+        // 5.2 EXIF GPS Check
+        if (hasExifGps) {
             flags.add("EXIF_GPS_PRESENT: Camera embedded coordinates found (" + exif.exifLatitude() + ", " + exif.exifLongitude() + ")");
         } else {
-            flags.add("EXIF_GPS_STRIPPED_OR_MISSING: Metadata stripped by device/browser; evaluated using device GPS");
+            if (hasDeviceGps) {
+                flags.add("EXIF_GPS_STRIPPED_OR_MISSING: Metadata stripped or absent; evaluated using device GPS");
+            } else {
+                flags.add("EXIF_GPS_NOT_FOUND: No embedded EXIF GPS coordinates found in image metadata");
+            }
         }
 
+        // 5.3 Device GPS Check
+        if (hasDeviceGps) {
+            String accStr = deviceAccuracy != null ? ", accuracy: ±" + deviceAccuracy + "m" : "";
+            flags.add("DEVICE_GPS_PRESENT: Device GPS coordinates recorded (" + deviceLat + ", " + deviceLon + accStr + ")");
+        } else {
+            flags.add("DEVICE_GPS_NOT_PROVIDED: No device GPS coordinates recorded by client");
+        }
+
+        // 5.4 Watermark / GPS Camera App Indicator Check (Treated as weak indicator; unverified text)
+        String originalFilename = file.getOriginalFilename() != null ? file.getOriginalFilename().toLowerCase() : "";
+        String sourceLower = captureSource != null ? captureSource.toLowerCase() : "";
+        boolean filenameOrSourceWatermark = originalFilename.contains("gpsmapcamera") ||
+                originalFilename.contains("gps_map_camera") ||
+                originalFilename.contains("gps camera") ||
+                originalFilename.contains("watermark") ||
+                sourceLower.contains("gps_map_camera") ||
+                sourceLower.contains("watermark");
+        boolean hasWatermarkIndicator = exif.hasWatermarkIndicator() || filenameOrSourceWatermark;
+        String ocrWatermarkText = null;
+        String ocrWatermarkStatus = null;
+
+        if (hasWatermarkIndicator) {
+            ocrWatermarkStatus = "INDICATOR_DETECTED_UNVERIFIED";
+            if (!hasExifGps && !hasDeviceGps) {
+                flags.add("VISIBLE_GPS_WATERMARK_NOT_MACHINE_VERIFIED: Visible GPS watermark or camera app indicator detected, but no machine-readable EXIF GPS coordinates found in file stream (watermark text is unverified)");
+            } else if (!hasExifGps) {
+                flags.add("VISIBLE_GPS_WATERMARK_NOT_MACHINE_VERIFIED: Visible GPS watermark indicator detected without embedded EXIF GPS; evaluated using device GPS");
+            }
+        }
+
+        // 5.5 Location Proximity Check
         boolean locationConsistent = false;
-        if (distToReport != null) {
-            if (distToReport <= toleranceMeters) {
-                locationConsistent = true;
-                flags.add("LOCATION_MATCHED: Distance " + distToReport + "m is within allowed tolerance of " + toleranceMeters + "m");
+        if (effectiveLat != null && effectiveLon != null) {
+            if (distToReport != null) {
+                if (distToReport <= toleranceMeters) {
+                    locationConsistent = true;
+                    flags.add("LOCATION_MATCHED: Distance " + distToReport + "m is within allowed tolerance of " + toleranceMeters + "m");
+                } else {
+                    flags.add("LOCATION_MISMATCH: Photo distance " + distToReport + "m exceeds allowed tolerance of " + toleranceMeters + "m");
+                }
             } else {
-                flags.add("LOCATION_MISMATCH: Photo distance " + distToReport + "m exceeds allowed tolerance of " + toleranceMeters + "m");
+                flags.add("TARGET_COORDINATES_MISSING: Report location missing for distance calculation");
             }
         } else {
             flags.add("NO_GPS_COORDINATES: Neither device GPS nor EXIF coordinates were available");
@@ -229,19 +332,35 @@ public class PhotoVerificationService {
             }
         }
 
-        // Timestamp Validation
-        OffsetDateTime effectiveTimestamp = deviceCapturedAt != null ? deviceCapturedAt : exif.exifCapturedAt();
+        // 5.6 Timestamp Validation
+        String timestampSource;
+        OffsetDateTime effectiveTimestamp;
+        if (deviceCapturedAt != null) {
+            effectiveTimestamp = deviceCapturedAt;
+            timestampSource = "DEVICE_CAMERA_CAPTURE";
+        } else if (exif.exifCapturedAt() != null) {
+            effectiveTimestamp = exif.exifCapturedAt();
+            timestampSource = "EXIF_HEADER";
+        } else {
+            effectiveTimestamp = null;
+            timestampSource = "UPLOAD_TIME_FALLBACK";
+        }
+
         if (effectiveTimestamp != null) {
             if (effectiveTimestamp.isAfter(now.plusMinutes(10))) {
-                flags.add("SUSPICIOUS_FUTURE_TIMESTAMP: Capture time is in the future (" + effectiveTimestamp + ")");
+                flags.add("SUSPICIOUS_FUTURE_TIMESTAMP: Capture time is in the future (" + effectiveTimestamp + ", source: " + timestampSource + ")");
             } else if (effectiveTimestamp.isBefore(now.minusHours(timeToleranceHours))) {
                 long hoursAgo = Duration.between(effectiveTimestamp, now).toHours();
-                flags.add("SUSPICIOUS_STALE_TIMESTAMP: Photo was captured " + hoursAgo + " hours ago (tolerance: " + timeToleranceHours + "h)");
+                flags.add("SUSPICIOUS_STALE_TIMESTAMP: Photo was captured " + hoursAgo + " hours ago (tolerance: " + timeToleranceHours + "h, source: " + timestampSource + ")");
             } else {
-                flags.add("TIMESTAMP_VALID: Captured recently (" + effectiveTimestamp + ")");
+                flags.add("TIMESTAMP_VALID: Captured recently at " + effectiveTimestamp + " (source: " + timestampSource + ")");
             }
         } else {
-            flags.add("TIMESTAMP_NOT_PROVIDED: No client capture timestamp recorded; using upload time");
+            flags.add("TIMESTAMP_NOT_PROVIDED: No client or EXIF capture timestamp recorded; upload time recorded as " + now);
+        }
+
+        if (fileLastModifiedAt != null) {
+            flags.add("FILE_MODIFICATION_TIME_RECORDED: File last modified at " + fileLastModifiedAt + " (filesystem attribute, not verified as capture time)");
         }
 
         if (exif.cameraModel() != null && !exif.cameraModel().isBlank()) {
@@ -255,22 +374,22 @@ public class PhotoVerificationService {
         if (isDuplicate) {
             status = "REJECTED";
             confidence = 0.0;
-        } else if (!locationConsistent || (distToReport != null && distToReport > toleranceMeters)) {
-            // Mismatched location -> Needs Review by Admin
-            status = "NEEDS_REVIEW";
-            confidence = 0.40;
         } else if (effectiveLat == null) {
-            // No coordinates provided -> Needs Review
+            // Neither GPS source provided -> Needs Review (NEVER automatically REJECT)
             status = "NEEDS_REVIEW";
             confidence = 0.50;
+        } else if (!locationConsistent || (distToReport != null && distToReport > toleranceMeters)) {
+            // Location mismatch -> Needs Review
+            status = "NEEDS_REVIEW";
+            confidence = 0.40;
         } else if (effectiveTimestamp != null && (effectiveTimestamp.isAfter(now.plusMinutes(10)) || effectiveTimestamp.isBefore(now.minusHours(timeToleranceHours)))) {
             // Suspicious timestamp -> Needs Review
             status = "NEEDS_REVIEW";
             confidence = 0.60;
         } else {
-            // Verified on site within tolerance
+            // Coordinates matched within tolerance
             status = "VERIFIED";
-            confidence = exif.hasExifGps() ? 0.98 : 0.92;
+            confidence = hasExifGps ? 0.98 : 0.92;
         }
 
         String flagsJson;
@@ -296,6 +415,13 @@ public class PhotoVerificationService {
             complaintImage.setVerificationStatus(status);
             complaintImage.setVerificationFlags(flagsJson);
             complaintImage.setCaptureSource(captureSource != null ? captureSource : "CAMERA");
+            complaintImage.setFileLastModifiedAt(fileLastModifiedAt);
+            complaintImage.setDeviceGpsAccuracy(deviceAccuracy);
+            complaintImage.setDeviceGpsTimestamp(deviceGpsTimestamp);
+            complaintImage.setCoordinateSource(coordinateSource);
+            complaintImage.setTimestampSource(timestampSource);
+            complaintImage.setOcrWatermarkText(ocrWatermarkText);
+            complaintImage.setOcrWatermarkStatus(ocrWatermarkStatus);
             complaintImageRepository.save(complaintImage);
         }
 
@@ -321,6 +447,11 @@ public class PhotoVerificationService {
         verifResult.setCheckReasons(flagsJson);
         verifResult.setReviewDecision("VERIFIED".equals(status) ? "APPROVED" : "PENDING");
         verifResult.setAnalysisNotes(checkType + " verified with status: " + status + " (" + flags.size() + " audit checks)");
+        verifResult.setCoordinateSource(coordinateSource);
+        verifResult.setTimestampSource(timestampSource);
+        verifResult.setDeviceGpsAccuracy(deviceAccuracy);
+        verifResult.setOcrWatermarkText(ocrWatermarkText);
+        verifResult.setOcrWatermarkStatus(ocrWatermarkStatus);
 
         verificationResultRepository.save(verifResult);
 
@@ -342,7 +473,12 @@ public class PhotoVerificationService {
                 flags,
                 confidence,
                 isDuplicate,
-                locationConsistent
+                locationConsistent,
+                coordinateSource,
+                timestampSource,
+                deviceAccuracy,
+                ocrWatermarkText,
+                ocrWatermarkStatus
         );
     }
 

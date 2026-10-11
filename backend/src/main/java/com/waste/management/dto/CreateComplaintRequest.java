@@ -1,5 +1,6 @@
 package com.waste.management.dto;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
@@ -36,10 +37,26 @@ public record CreateComplaintRequest(
 
         List<String> imageUrls,
 
+        @JsonAlias({"deviceLat", "device_latitude"})
         BigDecimal deviceLatitude,
+
+        @JsonAlias({"deviceLon", "device_longitude", "deviceLng", "device_lng"})
         BigDecimal deviceLongitude,
+
+        @JsonAlias({"device_captured_at", "capturedAt", "captured_at", "deviceTimestamp"})
         OffsetDateTime deviceCapturedAt,
-        String captureSource
+
+        @JsonAlias({"capture_source", "source"})
+        String captureSource,
+
+        @JsonAlias({"device_accuracy", "accuracy"})
+        Double deviceAccuracy,
+
+        @JsonAlias({"device_gps_timestamp", "gpsTimestamp"})
+        OffsetDateTime deviceGpsTimestamp,
+
+        @JsonAlias({"file_last_modified_at", "lastModifiedAt"})
+        OffsetDateTime fileLastModifiedAt
 ) {
     public CreateComplaintRequest(
             String title,
@@ -50,6 +67,22 @@ public record CreateComplaintRequest(
             BigDecimal longitude,
             String addressText,
             List<String> imageUrls) {
-        this(title, description, wasteType, estimatedSize, latitude, longitude, addressText, imageUrls, null, null, null, null);
+        this(title, description, wasteType, estimatedSize, latitude, longitude, addressText, imageUrls, null, null, null, null, null, null, null);
+    }
+
+    public CreateComplaintRequest(
+            String title,
+            String description,
+            String wasteType,
+            String estimatedSize,
+            BigDecimal latitude,
+            BigDecimal longitude,
+            String addressText,
+            List<String> imageUrls,
+            BigDecimal deviceLatitude,
+            BigDecimal deviceLongitude,
+            OffsetDateTime deviceCapturedAt,
+            String captureSource) {
+        this(title, description, wasteType, estimatedSize, latitude, longitude, addressText, imageUrls, deviceLatitude, deviceLongitude, deviceCapturedAt, captureSource, null, null, null);
     }
 }

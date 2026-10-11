@@ -22,5 +22,35 @@ public record PhotoVerificationResultDto(
         List<String> flags,
         double confidenceScore,
         boolean isDuplicate,
-        boolean isLocationConsistent
-) {}
+        boolean isLocationConsistent,
+        String coordinateSource,
+        String timestampSource,
+        Double deviceGpsAccuracy,
+        String ocrWatermarkText,
+        String ocrWatermarkStatus
+) {
+    public PhotoVerificationResultDto(
+            String verificationStatus,
+            String checkType,
+            BigDecimal deviceLatitude,
+            BigDecimal deviceLongitude,
+            OffsetDateTime deviceCapturedAt,
+            BigDecimal exifLatitude,
+            BigDecimal exifLongitude,
+            OffsetDateTime exifCapturedAt,
+            String cameraMake,
+            String cameraModel,
+            String sha256Hash,
+            Double distanceToTargetMeters,
+            Double distanceDeviceToExifMeters,
+            Double toleranceMeters,
+            List<String> flags,
+            double confidenceScore,
+            boolean isDuplicate,
+            boolean isLocationConsistent) {
+        this(verificationStatus, checkType, deviceLatitude, deviceLongitude, deviceCapturedAt,
+                exifLatitude, exifLongitude, exifCapturedAt, cameraMake, cameraModel, sha256Hash,
+                distanceToTargetMeters, distanceDeviceToExifMeters, toleranceMeters, flags,
+                confidenceScore, isDuplicate, isLocationConsistent, null, null, null, null, null);
+    }
+}

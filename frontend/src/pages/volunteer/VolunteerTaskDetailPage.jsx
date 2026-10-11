@@ -103,17 +103,36 @@ export default function VolunteerTaskDetailPage() {
           setDeviceMetadata({
             deviceLatitude: pos.coords.latitude,
             deviceLongitude: pos.coords.longitude,
-            deviceCapturedAt: new Date(pos.timestamp || Date.now()).toISOString(),
+            deviceAccuracy: pos.coords.accuracy,
+            deviceGpsTimestamp: new Date(pos.timestamp || Date.now()).toISOString(),
+            deviceCapturedAt: null, // Preserved null: file uploads do not fabricate capture time
+            fileLastModifiedAt: file.lastModified ? new Date(file.lastModified).toISOString() : null,
             captureSource: 'GALLERY_UPLOAD'
           });
         },
         () => {
-          setDeviceMetadata({ captureSource: 'GALLERY_UPLOAD' });
+          setDeviceMetadata({
+            deviceLatitude: null,
+            deviceLongitude: null,
+            deviceAccuracy: null,
+            deviceGpsTimestamp: null,
+            deviceCapturedAt: null,
+            fileLastModifiedAt: file.lastModified ? new Date(file.lastModified).toISOString() : null,
+            captureSource: 'GALLERY_UPLOAD'
+          });
         },
         { enableHighAccuracy: true, timeout: 5000, maximumAge: 60000 }
       );
     } else {
-      setDeviceMetadata({ captureSource: 'GALLERY_UPLOAD' });
+      setDeviceMetadata({
+        deviceLatitude: null,
+        deviceLongitude: null,
+        deviceAccuracy: null,
+        deviceGpsTimestamp: null,
+        deviceCapturedAt: null,
+        fileLastModifiedAt: file.lastModified ? new Date(file.lastModified).toISOString() : null,
+        captureSource: 'GALLERY_UPLOAD'
+      });
     }
   };
 
@@ -123,7 +142,10 @@ export default function VolunteerTaskDetailPage() {
     setDeviceMetadata({
       deviceLatitude: captured.deviceLatitude,
       deviceLongitude: captured.deviceLongitude,
+      deviceAccuracy: captured.deviceAccuracy,
       deviceCapturedAt: captured.deviceCapturedAt,
+      deviceGpsTimestamp: captured.deviceGpsTimestamp,
+      fileLastModifiedAt: captured.fileLastModifiedAt,
       captureSource: captured.captureSource
     });
     setShowCamera(false);
