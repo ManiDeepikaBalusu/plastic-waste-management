@@ -101,11 +101,13 @@ export default function VolunteerTaskDetailPage() {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           setDeviceMetadata({
-            deviceLatitude: pos.coords.latitude,
-            deviceLongitude: pos.coords.longitude,
+            deviceLatitude: null, // File uploads do not use browser position as photo capture GPS
+            deviceLongitude: null,
             deviceAccuracy: pos.coords.accuracy,
             deviceGpsTimestamp: new Date(pos.timestamp || Date.now()).toISOString(),
             deviceCapturedAt: null, // Preserved null: file uploads do not fabricate capture time
+            browserUploadLatitude: pos.coords.latitude,
+            browserUploadLongitude: pos.coords.longitude,
             fileLastModifiedAt: file.lastModified ? new Date(file.lastModified).toISOString() : null,
             captureSource: 'GALLERY_UPLOAD'
           });
@@ -117,6 +119,8 @@ export default function VolunteerTaskDetailPage() {
             deviceAccuracy: null,
             deviceGpsTimestamp: null,
             deviceCapturedAt: null,
+            browserUploadLatitude: null,
+            browserUploadLongitude: null,
             fileLastModifiedAt: file.lastModified ? new Date(file.lastModified).toISOString() : null,
             captureSource: 'GALLERY_UPLOAD'
           });
@@ -130,6 +134,8 @@ export default function VolunteerTaskDetailPage() {
         deviceAccuracy: null,
         deviceGpsTimestamp: null,
         deviceCapturedAt: null,
+        browserUploadLatitude: null,
+        browserUploadLongitude: null,
         fileLastModifiedAt: file.lastModified ? new Date(file.lastModified).toISOString() : null,
         captureSource: 'GALLERY_UPLOAD'
       });

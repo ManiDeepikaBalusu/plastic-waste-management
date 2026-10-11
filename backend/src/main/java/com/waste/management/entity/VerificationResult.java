@@ -107,6 +107,21 @@ public class VerificationResult {
     @Column(name = "ocr_watermark_status", length = 50)
     private String ocrWatermarkStatus;
 
+    @Column(name = "ocr_latitude", precision = 10, scale = 7)
+    private BigDecimal ocrLatitude;
+
+    @Column(name = "ocr_longitude", precision = 10, scale = 7)
+    private BigDecimal ocrLongitude;
+
+    @Column(name = "ocr_timestamp", length = 100)
+    private String ocrTimestamp;
+
+    @Column(name = "browser_upload_latitude", precision = 10, scale = 7)
+    private BigDecimal browserUploadLatitude;
+
+    @Column(name = "browser_upload_longitude", precision = 10, scale = 7)
+    private BigDecimal browserUploadLongitude;
+
     @Column(name = "verified_at", nullable = false, updatable = false)
     private OffsetDateTime verifiedAt = OffsetDateTime.now();
 
@@ -204,4 +219,19 @@ public class VerificationResult {
 
     public String getOcrWatermarkStatus() { return ocrWatermarkStatus; }
     public void setOcrWatermarkStatus(String ocrWatermarkStatus) { this.ocrWatermarkStatus = ocrWatermarkStatus; }
+
+    public BigDecimal getOcrLatitude() { return ocrLatitude; }
+    public void setOcrLatitude(BigDecimal ocrLatitude) { this.ocrLatitude = ocrLatitude; }
+
+    public BigDecimal getOcrLongitude() { return ocrLongitude; }
+    public void setOcrLongitude(BigDecimal ocrLongitude) { this.ocrLongitude = ocrLongitude; }
+
+    public String getOcrTimestamp() { return ocrTimestamp; }
+    public void setOcrTimestamp(String ocrTimestamp) { this.ocrTimestamp = ocrTimestamp; }
+
+    public BigDecimal getBrowserUploadLatitude() { return browserUploadLatitude; }
+    public void setBrowserUploadLatitude(BigDecimal browserUploadLatitude) { this.browserUploadLatitude = browserUploadLatitude; }
+
+    public BigDecimal getBrowserUploadLongitude() { return browserUploadLongitude; }
+    public void setBrowserUploadLongitude(BigDecimal browserUploadLongitude) { this.browserUploadLongitude = browserUploadLongitude; }
 }

@@ -2,6 +2,7 @@ package com.waste.management.service;
 
 import com.waste.management.dto.*;
 import com.waste.management.entity.*;
+import com.waste.management.exception.UnauthorizedActionException;
 import com.waste.management.repository.*;
 import com.waste.management.security.JwtTokenProvider;
 import com.waste.management.security.UserPrincipal;
@@ -71,6 +72,9 @@ class PhotoVerificationServiceTests {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private WatermarkOcrService watermarkOcrService;
 
     private User citizen;
     private User volunteer;
@@ -383,7 +387,7 @@ class PhotoVerificationServiceTests {
                 mockExtractor, distanceCalculator, complaintImageRepository,
                 verificationResultRepository, userRepository, assignmentRepository,
                 complaintRepository, progressUpdateRepository, notificationService,
-                volunteerProfileRepository, objectMapper
+                volunteerProfileRepository, watermarkOcrService, objectMapper
         );
 
         MockMultipartFile file = new MockMultipartFile("files", "with_exif.jpg", "image/jpeg", sampleJpegBytes);
@@ -637,6 +641,207 @@ class PhotoVerificationServiceTests {
         VerificationDecisionRequest secondDecision = new VerificationDecisionRequest("REJECT", "Second conflicting decision");
         assertThrows(IllegalStateException.class, () ->
                 photoVerificationService.processAdminDecision(record.getId(), secondDecision, UserPrincipal.create(admin))
+        );
+    }
+
+    @Test
+    @DisplayName("20. Identical Watermark Coordinates: Yields 0.0m distance but RETAINS NEEDS_REVIEW (Unverified data)")
+    void testOcrIdenticalCoordinatesYieldsZeroDistanceAndNeedsReview() {
+        WatermarkOcrService mockOcr = mock(WatermarkOcrService.class);
+        when(mockOcr.extractWatermark(any(), any())).thenReturn(
+                new WatermarkOcrResult(
+                        true,
+                        new BigDecimal("12.971600"),
+                        new BigDecimal("77.594600"),
+                        "Friday, 07/08/2026 02:36 PM GMT +05:30",
+                        "Lat 12.971600 Long 77.594600",
+                        List.of("GPS Map Camera", "Lat 12.971600 Long 77.594600"),
+                        "OCR_WATERMARK_UNVERIFIED",
+                        0.92
+                )
+        );
+
+        PhotoVerificationService customService = new PhotoVerificationService(
+                exifMetadataExtractor, distanceCalculator, complaintImageRepository, verificationResultRepository,
+                userRepository, assignmentRepository, complaintRepository, progressUpdateRepository,
+                notificationService, volunteerProfileRepository, mockOcr, objectMapper
+        );
+
+        MockMultipartFile file = new MockMultipartFile("files", "watermark_identical.jpg", "image/jpeg", sampleJpegBytes);
+        ComplaintImage img = complaintImageRepository.save(
+                new ComplaintImage(testComplaint, "https://res.cloudinary.com/demo/watermark_identical.jpg", "wm_id", "INITIAL_PROOF", citizen)
+        );
+
+        PhotoVerificationResultDto result = customService.verifyInitialPhoto(
+                file, testComplaint, img, null, null, null, "GALLERY_UPLOAD", citizen
+        );
+
+        assertEquals("NEEDS_REVIEW", result.verificationStatus(), "OCR watermark coordinates alone must NEVER automatically establish authenticity");
+        assertNotNull(result.distanceToTargetMeters());
+        assertEquals(0.0, result.distanceToTargetMeters(), 0.05, "Distance should be ~0.0m when complaint coordinates and watermark coordinates match");
+        assertEquals("OCR_WATERMARK_UNVERIFIED", result.coordinateSource());
+        assertTrue(result.flags().stream().anyMatch(f -> f.contains("OCR_WATERMARK_LOCATION_MATCHED")), "Should flag location match via watermark");
+        assertTrue(result.flags().stream().anyMatch(f -> f.contains("OCR_WATERMARK_REQUIRES_ADMIN_VERIFICATION")), "Should mandate admin verification");
+    }
+
+    @Test
+    @DisplayName("21. Gallery Upload: Browser upload GPS must NOT be used as photo capture location")
+    void testGalleryUploadIgnoresBrowserLocationAsShutterGps() {
+        MockMultipartFile file = new MockMultipartFile("files", "gallery_file.jpg", "image/jpeg", sampleJpegBytes);
+        ComplaintImage img = complaintImageRepository.save(
+                new ComplaintImage(testComplaint, "https://res.cloudinary.com/demo/gallery.jpg", "gal_id", "INITIAL_PROOF", citizen)
+        );
+
+        BigDecimal browserLat = new BigDecimal("16.545290");
+        BigDecimal browserLon = new BigDecimal("81.495100");
+
+        PhotoVerificationResultDto result = photoVerificationService.verifyInitialPhoto(
+                file, testComplaint, img, browserLat, browserLon, null, "GALLERY_UPLOAD",
+                12.0, OffsetDateTime.now(), null, browserLat, browserLon, citizen
+        );
+
+        assertNull(result.deviceLatitude(), "Device latitude must be null for gallery upload (never treated as shutter capture GPS)");
+        assertNull(result.deviceLongitude(), "Device longitude must be null for gallery upload");
+        assertEquals(browserLat, result.browserUploadLatitude(), "Browser upload latitude must be preserved in dedicated field");
+        assertEquals(browserLon, result.browserUploadLongitude(), "Browser upload longitude must be preserved in dedicated field");
+        assertTrue(result.flags().stream().anyMatch(f -> f.contains("BROWSER_UPLOAD_LOCATION_RECORDED")), "Should record browser upload location explicitly without conflating capture GPS");
+    }
+
+    @Test
+    @DisplayName("22. OCR Failure: Handled gracefully without throwing exceptions -> NEEDS_REVIEW")
+    void testOcrFailureHandledGracefully() {
+        WatermarkOcrService mockOcr = mock(WatermarkOcrService.class);
+        when(mockOcr.extractWatermark(any(), any())).thenReturn(WatermarkOcrResult.empty("OCR_FAILED"));
+
+        PhotoVerificationService customService = new PhotoVerificationService(
+                exifMetadataExtractor, distanceCalculator, complaintImageRepository, verificationResultRepository,
+                userRepository, assignmentRepository, complaintRepository, progressUpdateRepository,
+                notificationService, volunteerProfileRepository, mockOcr, objectMapper
+        );
+
+        MockMultipartFile file = new MockMultipartFile("files", "ocr_fail.jpg", "image/jpeg", sampleJpegBytes);
+        ComplaintImage img = complaintImageRepository.save(
+                new ComplaintImage(testComplaint, "https://res.cloudinary.com/demo/ocr_fail.jpg", "fail_id", "INITIAL_PROOF", citizen)
+        );
+
+        PhotoVerificationResultDto result = customService.verifyInitialPhoto(
+                file, testComplaint, img, null, null, null, "GALLERY_UPLOAD", citizen
+        );
+
+        assertEquals("NEEDS_REVIEW", result.verificationStatus());
+        assertTrue(result.flags().stream().anyMatch(f -> f.contains("OCR_PARSING_FAILED")));
+    }
+
+    @Test
+    @DisplayName("23. Unreadable Watermark: Coordinates missing from watermark -> flags unreadable")
+    void testUnreadableWatermarkCoordinates() {
+        WatermarkOcrService mockOcr = mock(WatermarkOcrService.class);
+        when(mockOcr.extractWatermark(any(), any())).thenReturn(
+                new WatermarkOcrResult(true, null, null, "2026-10-11", "GPS Map Camera blurry text", List.of("GPS Map Camera blurry text"), "NO_WATERMARK_FOUND", 0.4)
+        );
+
+        PhotoVerificationService customService = new PhotoVerificationService(
+                exifMetadataExtractor, distanceCalculator, complaintImageRepository, verificationResultRepository,
+                userRepository, assignmentRepository, complaintRepository, progressUpdateRepository,
+                notificationService, volunteerProfileRepository, mockOcr, objectMapper
+        );
+
+        MockMultipartFile file = new MockMultipartFile("files", "unreadable_wm.jpg", "image/jpeg", sampleJpegBytes);
+        ComplaintImage img = complaintImageRepository.save(
+                new ComplaintImage(testComplaint, "https://res.cloudinary.com/demo/unreadable.jpg", "unreadable_id", "INITIAL_PROOF", citizen)
+        );
+
+        PhotoVerificationResultDto result = customService.verifyInitialPhoto(
+                file, testComplaint, img, null, null, null, "GALLERY_UPLOAD", citizen
+        );
+
+        assertEquals("NEEDS_REVIEW", result.verificationStatus());
+        assertTrue(result.flags().stream().anyMatch(f -> f.contains("VISIBLE_GPS_WATERMARK_COORDINATES_UNREADABLE")));
+    }
+
+    @Test
+    @DisplayName("24. Ambiguous Timestamp: Preserved exactly without destructive timezone alterations")
+    void testAmbiguousTimestampNotSilentlyChanged() {
+        String originalTimestampText = "Friday, 07/08/2026 02:36 PM GMT +05:30";
+        WatermarkOcrService mockOcr = mock(WatermarkOcrService.class);
+        when(mockOcr.extractWatermark(any(), any())).thenReturn(
+                new WatermarkOcrResult(
+                        true,
+                        new BigDecimal("12.971600"),
+                        new BigDecimal("77.594600"),
+                        originalTimestampText,
+                        "GPS Map Camera Lat 12.971600 Long 77.594600 " + originalTimestampText,
+                        List.of("Lat 12.971600 Long 77.594600", originalTimestampText),
+                        "OCR_WATERMARK_UNVERIFIED",
+                        0.90
+                )
+        );
+
+        PhotoVerificationService customService = new PhotoVerificationService(
+                exifMetadataExtractor, distanceCalculator, complaintImageRepository, verificationResultRepository,
+                userRepository, assignmentRepository, complaintRepository, progressUpdateRepository,
+                notificationService, volunteerProfileRepository, mockOcr, objectMapper
+        );
+
+        MockMultipartFile file = new MockMultipartFile("files", "timestamp_check.jpg", "image/jpeg", sampleJpegBytes);
+        ComplaintImage img = complaintImageRepository.save(
+                new ComplaintImage(testComplaint, "https://res.cloudinary.com/demo/timestamp.jpg", "ts_id", "INITIAL_PROOF", citizen)
+        );
+
+        PhotoVerificationResultDto result = customService.verifyInitialPhoto(
+                file, testComplaint, img, null, null, null, "GALLERY_UPLOAD", citizen
+        );
+
+        assertEquals(originalTimestampText, result.ocrTimestamp(), "Raw visible watermark timestamp string must be preserved exactly");
+        assertEquals("OCR_WATERMARK_TIMESTAMP_UNVERIFIED", result.timestampSource());
+        assertTrue(result.flags().stream().anyMatch(f -> f.contains("OCR_WATERMARK_TIMESTAMP_DETECTED")));
+    }
+
+    @Test
+    @DisplayName("25. AI Service Unavailable: Graceful fallback without pipeline interruption")
+    void testUnavailableAiServiceFallback() {
+        WatermarkOcrService mockOcr = mock(WatermarkOcrService.class);
+        when(mockOcr.extractWatermark(any(), any())).thenReturn(WatermarkOcrResult.empty("AI_SERVICE_UNAVAILABLE"));
+
+        PhotoVerificationService customService = new PhotoVerificationService(
+                exifMetadataExtractor, distanceCalculator, complaintImageRepository, verificationResultRepository,
+                userRepository, assignmentRepository, complaintRepository, progressUpdateRepository,
+                notificationService, volunteerProfileRepository, mockOcr, objectMapper
+        );
+
+        MockMultipartFile file = new MockMultipartFile("files", "service_down.jpg", "image/jpeg", sampleJpegBytes);
+        ComplaintImage img = complaintImageRepository.save(
+                new ComplaintImage(testComplaint, "https://res.cloudinary.com/demo/service_down.jpg", "sd_id", "INITIAL_PROOF", citizen)
+        );
+
+        PhotoVerificationResultDto result = customService.verifyInitialPhoto(
+                file, testComplaint, img, null, null, null, "GALLERY_UPLOAD", citizen
+        );
+
+        assertEquals("NEEDS_REVIEW", result.verificationStatus());
+        assertTrue(result.flags().stream().anyMatch(f -> f.contains("OCR_SERVICE_UNAVAILABLE")));
+    }
+
+    @Test
+    @DisplayName("26. Re-evaluation: Admin-authorized operation with progress update audit record")
+    void testReevaluationAdminOnlyAndAuditRecorded() {
+        // Create a verification record
+        MockMultipartFile file = new MockMultipartFile("files", "reeval_test.jpg", "image/jpeg", sampleJpegBytes);
+        ComplaintImage img = complaintImageRepository.save(
+                new ComplaintImage(testComplaint, "https://res.cloudinary.com/demo/reeval.jpg", "reeval_id", "INITIAL_PROOF", citizen)
+        );
+
+        photoVerificationService.verifyInitialPhoto(file, testComplaint, img, null, null, null, "GALLERY_UPLOAD", citizen);
+        VerificationResult record = verificationResultRepository.findByComplaintIdOrderByVerifiedAtDesc(testComplaint.getId()).get(0);
+
+        // Citizen attempting re-evaluation should throw UnauthorizedActionException
+        assertThrows(UnauthorizedActionException.class, () ->
+                photoVerificationService.reEvaluateVerification(record.getId(), UserPrincipal.create(citizen))
+        );
+
+        // Volunteer attempting re-evaluation should throw UnauthorizedActionException
+        assertThrows(UnauthorizedActionException.class, () ->
+                photoVerificationService.reEvaluateVerification(record.getId(), UserPrincipal.create(volunteer))
         );
     }
 }

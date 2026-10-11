@@ -104,6 +104,8 @@ public class ComplaintService {
                     "INITIAL_PROOF",
                     citizen
             );
+            img.setBrowserUploadLatitude(request.browserUploadLatitude());
+            img.setBrowserUploadLongitude(request.browserUploadLongitude());
             ComplaintImage savedImg = complaintImageRepository.save(img);
 
             // Execute automated GPS and EXIF verification
@@ -118,6 +120,8 @@ public class ComplaintService {
                     request.deviceAccuracy(),
                     request.deviceGpsTimestamp(),
                     request.fileLastModifiedAt(),
+                    request.browserUploadLatitude(),
+                    request.browserUploadLongitude(),
                     citizen
             );
 

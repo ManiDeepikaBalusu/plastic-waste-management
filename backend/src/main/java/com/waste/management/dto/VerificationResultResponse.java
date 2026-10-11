@@ -31,7 +31,17 @@ public record VerificationResultResponse(
         String reviewedByName,
         String reviewedByEmail,
         OffsetDateTime reviewedAt,
-        OffsetDateTime verifiedAt
+        OffsetDateTime verifiedAt,
+        String coordinateSource,
+        String timestampSource,
+        Double deviceGpsAccuracy,
+        String ocrWatermarkText,
+        String ocrWatermarkStatus,
+        BigDecimal ocrLatitude,
+        BigDecimal ocrLongitude,
+        String ocrTimestamp,
+        BigDecimal browserUploadLatitude,
+        BigDecimal browserUploadLongitude
 ) {
     public VerificationResultResponse(
             UUID id,
@@ -60,7 +70,41 @@ public record VerificationResultResponse(
         this(id, complaintId, assignmentId, imageId, verifierType, verificationStatus, checkType,
                 isValidPlastic, confidenceScore, deviceLatitude, deviceLongitude, exifLatitude,
                 exifLongitude, targetLatitude, targetLongitude, distanceMeters, distanceToleranceMeters,
-                checkReasons, reviewDecision, adminNotes, reviewedBy, null, null, reviewedAt, verifiedAt);
+                checkReasons, reviewDecision, adminNotes, reviewedBy, null, null, reviewedAt, verifiedAt,
+                null, null, null, null, null, null, null, null, null, null);
+    }
+
+    public VerificationResultResponse(
+            UUID id,
+            UUID complaintId,
+            UUID assignmentId,
+            UUID imageId,
+            String verifierType,
+            String verificationStatus,
+            String checkType,
+            Boolean isValidPlastic,
+            BigDecimal confidenceScore,
+            BigDecimal deviceLatitude,
+            BigDecimal deviceLongitude,
+            BigDecimal exifLatitude,
+            BigDecimal exifLongitude,
+            BigDecimal targetLatitude,
+            BigDecimal targetLongitude,
+            Double distanceMeters,
+            Double distanceToleranceMeters,
+            String checkReasons,
+            String reviewDecision,
+            String adminNotes,
+            UUID reviewedBy,
+            String reviewedByName,
+            String reviewedByEmail,
+            OffsetDateTime reviewedAt,
+            OffsetDateTime verifiedAt) {
+        this(id, complaintId, assignmentId, imageId, verifierType, verificationStatus, checkType,
+                isValidPlastic, confidenceScore, deviceLatitude, deviceLongitude, exifLatitude,
+                exifLongitude, targetLatitude, targetLongitude, distanceMeters, distanceToleranceMeters,
+                checkReasons, reviewDecision, adminNotes, reviewedBy, reviewedByName, reviewedByEmail,
+                reviewedAt, verifiedAt, null, null, null, null, null, null, null, null, null, null);
     }
 
     public static VerificationResultResponse fromEntity(VerificationResult entity) {
@@ -89,7 +133,17 @@ public record VerificationResultResponse(
                 entity.getReviewedBy() != null ? entity.getReviewedBy().getFullName() : null,
                 entity.getReviewedBy() != null ? entity.getReviewedBy().getEmail() : null,
                 entity.getReviewedAt(),
-                entity.getVerifiedAt()
+                entity.getVerifiedAt(),
+                entity.getCoordinateSource(),
+                entity.getTimestampSource(),
+                entity.getDeviceGpsAccuracy(),
+                entity.getOcrWatermarkText(),
+                entity.getOcrWatermarkStatus(),
+                entity.getOcrLatitude(),
+                entity.getOcrLongitude(),
+                entity.getOcrTimestamp(),
+                entity.getBrowserUploadLatitude(),
+                entity.getBrowserUploadLongitude()
         );
     }
 }

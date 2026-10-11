@@ -103,11 +103,13 @@ export default function CitizenComplaintForm({ onComplaintSubmitted }) {
         navigator.geolocation.getCurrentPosition(
           (pos) => {
             setDeviceMetadata({
-              deviceLatitude: pos.coords.latitude,
-              deviceLongitude: pos.coords.longitude,
+              deviceLatitude: null, // File uploads do not use browser position as photo capture GPS
+              deviceLongitude: null,
               deviceAccuracy: pos.coords.accuracy,
               deviceGpsTimestamp: new Date(pos.timestamp || Date.now()).toISOString(),
               deviceCapturedAt: null, // Preserved null: file uploads do not fabricate capture time
+              browserUploadLatitude: pos.coords.latitude,
+              browserUploadLongitude: pos.coords.longitude,
               fileLastModifiedAt: fileModTime,
               captureSource: defaultSource
             })
@@ -120,6 +122,8 @@ export default function CitizenComplaintForm({ onComplaintSubmitted }) {
               deviceAccuracy: null,
               deviceGpsTimestamp: null,
               deviceCapturedAt: null,
+              browserUploadLatitude: null,
+              browserUploadLongitude: null,
               fileLastModifiedAt: fileModTime,
               captureSource: defaultSource
             })
@@ -133,6 +137,8 @@ export default function CitizenComplaintForm({ onComplaintSubmitted }) {
           deviceAccuracy: null,
           deviceGpsTimestamp: null,
           deviceCapturedAt: null,
+          browserUploadLatitude: null,
+          browserUploadLongitude: null,
           fileLastModifiedAt: fileModTime,
           captureSource: defaultSource
         })
@@ -203,6 +209,7 @@ export default function CitizenComplaintForm({ onComplaintSubmitted }) {
     try {
       // Create FormData payload
       const formData = new FormData()
+      const isLiveCamera = deviceMetadata?.captureSource === 'IN_APP_CAMERA' || deviceMetadata?.captureSource === 'CAMERA'
       const dataPayload = {
         title: title.trim(),
         description: description.trim(),
@@ -211,13 +218,15 @@ export default function CitizenComplaintForm({ onComplaintSubmitted }) {
         latitude: latNum,
         longitude: lngNum,
         addressText: addressText.trim(),
-        deviceLatitude: deviceMetadata?.deviceLatitude != null ? parseFloat(deviceMetadata.deviceLatitude) : undefined,
-        deviceLongitude: deviceMetadata?.deviceLongitude != null ? parseFloat(deviceMetadata.deviceLongitude) : undefined,
-        deviceCapturedAt: deviceMetadata?.deviceCapturedAt || undefined,
+        deviceLatitude: isLiveCamera && deviceMetadata?.deviceLatitude != null ? parseFloat(deviceMetadata.deviceLatitude) : undefined,
+        deviceLongitude: isLiveCamera && deviceMetadata?.deviceLongitude != null ? parseFloat(deviceMetadata.deviceLongitude) : undefined,
+        deviceCapturedAt: isLiveCamera ? deviceMetadata?.deviceCapturedAt || undefined : undefined,
         captureSource: deviceMetadata?.captureSource || 'GALLERY_UPLOAD',
         deviceAccuracy: deviceMetadata?.deviceAccuracy != null ? parseFloat(deviceMetadata.deviceAccuracy) : undefined,
         deviceGpsTimestamp: deviceMetadata?.deviceGpsTimestamp || undefined,
-        fileLastModifiedAt: deviceMetadata?.fileLastModifiedAt || undefined
+        fileLastModifiedAt: deviceMetadata?.fileLastModifiedAt || undefined,
+        browserUploadLatitude: deviceMetadata?.browserUploadLatitude != null ? parseFloat(deviceMetadata.browserUploadLatitude) : undefined,
+        browserUploadLongitude: deviceMetadata?.browserUploadLongitude != null ? parseFloat(deviceMetadata.browserUploadLongitude) : undefined
       }
 
       formData.append(

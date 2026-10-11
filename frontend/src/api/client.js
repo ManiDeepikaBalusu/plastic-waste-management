@@ -147,7 +147,8 @@ export const assignmentsApi = {
 export const verificationsApi = {
   getComplaintVerifications: (complaintId) => api.get(`/verifications/complaint/${complaintId}`),
   getAssignmentVerifications: (assignmentId) => api.get(`/verifications/assignment/${assignmentId}`),
-  submitDecision: (verificationId, decisionData) => api.post(`/verifications/${verificationId}/decision`, decisionData)
+  submitDecision: (verificationId, decisionData) => api.post(`/verifications/${verificationId}/decision`, decisionData),
+  reEvaluate: (verificationId) => api.post(`/verifications/${verificationId}/re-evaluate`)
 };
 
 export const notificationsApi = {

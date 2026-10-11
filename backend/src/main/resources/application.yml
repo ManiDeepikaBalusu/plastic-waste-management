@@ -50,6 +50,8 @@ app:
     location-tolerance-meters: ${LOCATION_TOLERANCE_METERS:200.0}
     cleanup-tolerance-meters: ${CLEANUP_TOLERANCE_METERS:200.0}
     time-tolerance-hours: ${TIME_TOLERANCE_HOURS:24}
+    ocr-service-url: ${OCR_SERVICE_URL:http://localhost:8001}
+    ocr-enabled: ${OCR_ENABLED:true}
 
 management:
   endpoints:

@@ -16,7 +16,8 @@ import {
   Send,
   Info,
   FileCheck,
-  Hash
+  Hash,
+  RotateCw
 } from 'lucide-react';
 
 export default function AdminComplaintReviewPage() {
@@ -29,6 +30,7 @@ export default function AdminComplaintReviewPage() {
   const [error, setError] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [feedbackMsg, setFeedbackMsg] = useState('');
+  const [reevaluatingId, setReevaluatingId] = useState(null);
 
   // Admin Verification Decision Modal state
   const [decisionModal, setDecisionModal] = useState({
@@ -214,6 +216,24 @@ export default function AdminComplaintReviewPage() {
       setAssignError(err.message || 'Failed to dispatch assignment.');
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  const handleReevaluate = async (verificationId) => {
+    try {
+      setReevaluatingId(verificationId);
+      setError(null);
+      await verificationsApi.reEvaluate(verificationId);
+      setFeedbackMsg('Evidence re-evaluated successfully with latest OCR pipeline.');
+      setTimeout(() => setFeedbackMsg(''), 5000);
+      const updatedVerifs = await verificationsApi.getComplaintVerifications(id);
+      setVerifications(updatedVerifs);
+      const compData = await complaintsApi.getById(id);
+      setComplaint(compData);
+    } catch (err) {
+      setError(err.message || 'Failed to re-evaluate evidence.');
+    } finally {
+      setReevaluatingId(null);
     }
   };
 
@@ -524,7 +544,7 @@ export default function AdminComplaintReviewPage() {
                     }}
                   >
                     {/* Record Header */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                         <FileCheck size={16} color="var(--accent-cyan)" />
                         <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>
@@ -532,6 +552,25 @@ export default function AdminComplaintReviewPage() {
                         </span>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <button
+                          type="button"
+                          onClick={() => handleReevaluate(v.id)}
+                          disabled={reevaluatingId === v.id || actionLoading}
+                          className="service-btn"
+                          style={{
+                            padding: '0.2rem 0.6rem',
+                            fontSize: '0.75rem',
+                            background: 'rgba(56, 189, 248, 0.15)',
+                            borderColor: 'rgba(56, 189, 248, 0.4)',
+                            color: '#38bdf8',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.35rem'
+                          }}
+                        >
+                          <RotateCw size={13} style={{ animation: reevaluatingId === v.id ? 'spin 1s linear infinite' : 'none' }} />
+                          {reevaluatingId === v.id ? 'Re-evaluating...' : 'Re-evaluate Evidence'}
+                        </button>
                         <span style={{
                           padding: '0.2rem 0.65rem',
                           borderRadius: '12px',
@@ -557,6 +596,39 @@ export default function AdminComplaintReviewPage() {
                       </div>
                     </div>
 
+                    {/* Resolved Coordinate Source & Timestamp Badges */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)', fontWeight: 600 }}>Resolved Source:</span>
+                      <span style={{
+                        padding: '0.15rem 0.55rem',
+                        borderRadius: '4px',
+                        fontSize: '0.72rem',
+                        fontWeight: 700,
+                        background: v.coordinateSource === 'OCR_WATERMARK_UNVERIFIED' ? 'rgba(245, 158, 11, 0.15)' : v.coordinateSource === 'EXIF_HEADER' ? 'rgba(56, 189, 248, 0.15)' : v.coordinateSource === 'DEVICE_CAMERA_GPS' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(148, 163, 184, 0.15)',
+                        color: v.coordinateSource === 'OCR_WATERMARK_UNVERIFIED' ? '#fbbf24' : v.coordinateSource === 'EXIF_HEADER' ? '#38bdf8' : v.coordinateSource === 'DEVICE_CAMERA_GPS' ? '#34d399' : '#94a3b8',
+                        border: `1px solid ${v.coordinateSource === 'OCR_WATERMARK_UNVERIFIED' ? 'rgba(245, 158, 11, 0.3)' : v.coordinateSource === 'EXIF_HEADER' ? 'rgba(56, 189, 248, 0.3)' : v.coordinateSource === 'DEVICE_CAMERA_GPS' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(148, 163, 184, 0.3)'}`
+                      }}>
+                        {v.coordinateSource === 'OCR_WATERMARK_UNVERIFIED' ? '⚠️ OCR Watermark (Unverified Text Overlay)'
+                          : v.coordinateSource === 'EXIF_HEADER' ? '📷 EXIF Geotag (Hardware)'
+                          : v.coordinateSource === 'DEVICE_CAMERA_GPS' ? '📱 In-App Camera Shutter GPS'
+                          : v.coordinateSource === 'DEVICE_AND_EXIF_GPS' ? '✓ Device & EXIF Corroborated'
+                          : 'No Photo GPS'}
+                      </span>
+                      {v.timestampSource && (
+                        <span style={{
+                          padding: '0.15rem 0.55rem',
+                          borderRadius: '4px',
+                          fontSize: '0.72rem',
+                          fontWeight: 600,
+                          background: 'rgba(255, 255, 255, 0.04)',
+                          color: 'var(--text-muted)',
+                          border: '1px solid rgba(255, 255, 255, 0.08)'
+                        }}>
+                          Time: {v.timestampSource}
+                        </span>
+                      )}
+                    </div>
+
                     {/* Verification Data Grid */}
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
                       {/* Distance Check */}
@@ -569,20 +641,22 @@ export default function AdminComplaintReviewPage() {
                         </div>
                         <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '2px' }}>
                           Tolerance: {distTol ? `${distTol.toFixed(0)}m` : '200m'}
-                          {distMeters != null ? (isWithinTolerance ? ' (Within bounds ✓)' : ' (Exceeded ⚠️)') : ' (Pending review)'}
+                          {distMeters != null ? (isWithinTolerance ? (v.coordinateSource === 'OCR_WATERMARK_UNVERIFIED' ? ' (Within bounds ✓ — Unverified)' : ' (Within bounds ✓)') : ' (Exceeded ⚠️)') : ' (Pending review)'}
                         </div>
                       </div>
 
-                      {/* Device GPS */}
+                      {/* Candidate / Watermark GPS */}
                       <div style={{ background: 'rgba(255,255,255,0.02)', padding: '0.75rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.05)' }}>
                         <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', textTransform: 'uppercase', marginBottom: '0.25rem' }}>
-                          Device Live GPS
+                          {v.ocrLatitude != null ? 'OCR Watermark GPS' : 'Device Live GPS'}
                         </div>
-                        <div style={{ fontSize: '0.85rem', fontWeight: 600, fontFamily: 'monospace', color: 'var(--text-main)' }}>
-                          {v.deviceLatitude != null ? `${Number(v.deviceLatitude).toFixed(5)}, ${Number(v.deviceLongitude).toFixed(5)}` : 'Not provided'}
+                        <div style={{ fontSize: '0.85rem', fontWeight: 600, fontFamily: 'monospace', color: v.ocrLatitude != null ? '#fbbf24' : 'var(--text-main)' }}>
+                          {v.ocrLatitude != null ? `${Number(v.ocrLatitude).toFixed(5)}, ${Number(v.ocrLongitude).toFixed(5)}`
+                            : v.deviceLatitude != null ? `${Number(v.deviceLatitude).toFixed(5)}, ${Number(v.deviceLongitude).toFixed(5)}`
+                            : 'Not provided'}
                         </div>
                         <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '2px' }}>
-                          {v.verifiedAt ? `Recorded: ${new Date(v.verifiedAt).toLocaleTimeString()}` : 'Live client coordinate'}
+                          {v.ocrLatitude != null ? '⚠️ Unverified photo overlay' : v.verifiedAt ? `Recorded: ${new Date(v.verifiedAt).toLocaleTimeString()}` : 'Live client coordinate'}
                         </div>
                       </div>
 
@@ -599,6 +673,36 @@ export default function AdminComplaintReviewPage() {
                         </div>
                       </div>
 
+                      {/* Browser Upload GPS (Separated) */}
+                      {v.browserUploadLatitude != null && (
+                        <div style={{ background: 'rgba(255,255,255,0.02)', padding: '0.75rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', textTransform: 'uppercase', marginBottom: '0.25rem' }}>
+                            Browser Upload GPS
+                          </div>
+                          <div style={{ fontSize: '0.85rem', fontWeight: 600, fontFamily: 'monospace', color: 'var(--text-main)' }}>
+                            {`${Number(v.browserUploadLatitude).toFixed(5)}, ${Number(v.browserUploadLongitude).toFixed(5)}`}
+                          </div>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '2px' }}>
+                            Upload-time browser location (Not photo GPS)
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Visible Watermark Timestamp */}
+                      {v.ocrTimestamp && (
+                        <div style={{ background: 'rgba(255,255,255,0.02)', padding: '0.75rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', textTransform: 'uppercase', marginBottom: '0.25rem' }}>
+                            Watermark Timestamp
+                          </div>
+                          <div style={{ fontSize: '0.82rem', fontWeight: 600, fontFamily: 'monospace', color: '#fbbf24' }}>
+                            {v.ocrTimestamp}
+                          </div>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '2px' }}>
+                            Visible timestamp on image
+                          </div>
+                        </div>
+                      )}
+
                       {/* Check Type & Confidence */}
                       <div style={{ background: 'rgba(255,255,255,0.02)', padding: '0.75rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.05)' }}>
                         <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', textTransform: 'uppercase', marginBottom: '0.25rem' }}>
@@ -612,6 +716,18 @@ export default function AdminComplaintReviewPage() {
                         </div>
                       </div>
                     </div>
+
+                    {/* Raw OCR Evidence Snippet */}
+                    {v.ocrWatermarkText && (
+                      <div style={{ background: 'rgba(245, 158, 11, 0.04)', border: '1px dashed rgba(245, 158, 11, 0.25)', borderRadius: '6px', padding: '0.65rem 0.85rem', marginBottom: '1rem' }}>
+                        <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#fbbf24', marginBottom: '0.25rem' }}>
+                          Raw OCR Watermark Evidence:
+                        </div>
+                        <div style={{ fontSize: '0.78rem', fontFamily: 'monospace', color: 'var(--text-muted)', whiteSpace: 'pre-wrap', lineHeight: '1.4' }}>
+                          {v.ocrWatermarkText}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Flags */}
                     {flags && flags.length > 0 && (

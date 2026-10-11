@@ -50,4 +50,13 @@ public class VerificationController {
         VerificationResultResponse response = photoVerificationService.processAdminDecision(id, request, adminUser);
         return ResponseEntity.ok(response);
     }
+
+    @PostMapping("/{id}/re-evaluate")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<VerificationResultResponse> reEvaluate(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal adminUser) {
+        VerificationResultResponse response = photoVerificationService.reEvaluateVerification(id, adminUser);
+        return ResponseEntity.ok(response);
+    }
 }

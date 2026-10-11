@@ -24,3 +24,5 @@ app:
     location-tolerance-meters: 200.0
     cleanup-tolerance-meters: 200.0
     time-tolerance-hours: 24
+    ocr-service-url: http://localhost:8001
+    ocr-enabled: true

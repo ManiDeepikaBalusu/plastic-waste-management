@@ -56,7 +56,13 @@ public record CreateComplaintRequest(
         OffsetDateTime deviceGpsTimestamp,
 
         @JsonAlias({"file_last_modified_at", "lastModifiedAt"})
-        OffsetDateTime fileLastModifiedAt
+        OffsetDateTime fileLastModifiedAt,
+
+        @JsonAlias({"browser_upload_latitude", "browserUploadLat", "uploadLat"})
+        BigDecimal browserUploadLatitude,
+
+        @JsonAlias({"browser_upload_longitude", "browserUploadLon", "uploadLon", "browserUploadLng"})
+        BigDecimal browserUploadLongitude
 ) {
     public CreateComplaintRequest(
             String title,
@@ -67,7 +73,8 @@ public record CreateComplaintRequest(
             BigDecimal longitude,
             String addressText,
             List<String> imageUrls) {
-        this(title, description, wasteType, estimatedSize, latitude, longitude, addressText, imageUrls, null, null, null, null, null, null, null);
+        this(title, description, wasteType, estimatedSize, latitude, longitude, addressText, imageUrls,
+                null, null, null, null, null, null, null, null, null);
     }
 
     public CreateComplaintRequest(
@@ -83,6 +90,28 @@ public record CreateComplaintRequest(
             BigDecimal deviceLongitude,
             OffsetDateTime deviceCapturedAt,
             String captureSource) {
-        this(title, description, wasteType, estimatedSize, latitude, longitude, addressText, imageUrls, deviceLatitude, deviceLongitude, deviceCapturedAt, captureSource, null, null, null);
+        this(title, description, wasteType, estimatedSize, latitude, longitude, addressText, imageUrls,
+                deviceLatitude, deviceLongitude, deviceCapturedAt, captureSource, null, null, null, null, null);
+    }
+
+    public CreateComplaintRequest(
+            String title,
+            String description,
+            String wasteType,
+            String estimatedSize,
+            BigDecimal latitude,
+            BigDecimal longitude,
+            String addressText,
+            List<String> imageUrls,
+            BigDecimal deviceLatitude,
+            BigDecimal deviceLongitude,
+            OffsetDateTime deviceCapturedAt,
+            String captureSource,
+            Double deviceAccuracy,
+            OffsetDateTime deviceGpsTimestamp,
+            OffsetDateTime fileLastModifiedAt) {
+        this(title, description, wasteType, estimatedSize, latitude, longitude, addressText, imageUrls,
+                deviceLatitude, deviceLongitude, deviceCapturedAt, captureSource, deviceAccuracy,
+                deviceGpsTimestamp, fileLastModifiedAt, null, null);
     }
 }
