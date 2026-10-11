@@ -30,13 +30,18 @@ public class UserPrincipal implements UserDetails {
     }
 
     public static UserPrincipal create(User user) {
-        List<GrantedAuthority> authorities = List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole()));
+        String rawRole = user.getRole() == null ? "" : user.getRole().trim().toUpperCase();
+        String cleanRole = rawRole.startsWith("ROLE_") ? rawRole.substring(5) : rawRole;
+        List<GrantedAuthority> authorities = List.of(
+                new SimpleGrantedAuthority("ROLE_" + cleanRole),
+                new SimpleGrantedAuthority(cleanRole)
+        );
         return new UserPrincipal(
                 user.getId(),
                 user.getEmail(),
                 user.getPasswordHash(),
                 user.getFullName(),
-                user.getRole(),
+                cleanRole,
                 Boolean.TRUE.equals(user.getIsActive()),
                 authorities
         );

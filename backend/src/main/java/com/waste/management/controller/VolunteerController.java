@@ -22,8 +22,16 @@ public class VolunteerController {
         this.volunteerService = volunteerService;
     }
 
+    @GetMapping("/status")
+    @PreAuthorize("hasAnyRole('VOLUNTEER', 'ADMIN')")
+    public ResponseEntity<VolunteerProfileResponse> getStatus(
+            @AuthenticationPrincipal UserPrincipal currentUser) {
+        VolunteerProfileResponse response = volunteerService.getProfile(currentUser);
+        return ResponseEntity.ok(response);
+    }
+
     @PutMapping("/status")
-    @PreAuthorize("hasRole('VOLUNTEER')")
+    @PreAuthorize("hasAnyRole('VOLUNTEER', 'ADMIN')")
     public ResponseEntity<VolunteerProfileResponse> updateStatus(
             @Valid @RequestBody VolunteerStatusRequest request,
             @AuthenticationPrincipal UserPrincipal currentUser) {
@@ -32,7 +40,7 @@ public class VolunteerController {
     }
 
     @GetMapping("/profile")
-    @PreAuthorize("hasRole('VOLUNTEER')")
+    @PreAuthorize("hasAnyRole('VOLUNTEER', 'ADMIN')")
     public ResponseEntity<VolunteerProfileResponse> getProfile(
             @AuthenticationPrincipal UserPrincipal currentUser) {
         VolunteerProfileResponse response = volunteerService.getProfile(currentUser);

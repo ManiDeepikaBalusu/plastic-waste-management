@@ -53,12 +53,8 @@ public class MediaService {
 
             return new MediaUploadResponse(imageUrl, publicId, "Image successfully uploaded to Cloudinary.");
         } catch (Exception ex) {
-            logger.warn("Cloudinary API upload failed or demo credentials in use: {}. Generating mock upload URL for testing.", ex.getMessage());
-            
-            // Graceful fallback for local development / offline testing without Cloudinary credentials
-            String mockPublicId = "waste_" + UUID.randomUUID().toString().substring(0, 8);
-            String mockUrl = "https://res.cloudinary.com/demo/image/upload/v1700000000/plastic_waste_reports/" + mockPublicId + ".jpg";
-            return new MediaUploadResponse(mockUrl, mockPublicId, "Mock image upload registered for development.");
+            logger.error("Cloudinary image upload failed: {}", ex.getMessage(), ex);
+            throw new RuntimeException("Image upload to storage service failed: " + ex.getMessage(), ex);
         }
     }
 }

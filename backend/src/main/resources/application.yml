@@ -31,9 +31,9 @@ spring:
     locations: classpath:db/migration
 
 cloudinary:
-  cloud-name: ${CLOUDINARY_CLOUD_NAME:demo}
-  api-key: ${CLOUDINARY_API_KEY:1234567890}
-  api-secret: ${CLOUDINARY_API_SECRET:abcdefghijklmnopqrstuvwxyz}
+  cloud-name: ${CLOUDINARY_CLOUD_NAME:kozxwvl6}
+  api-key: ${CLOUDINARY_API_KEY:931751964176326}
+  api-secret: ${CLOUDINARY_API_SECRET:y6RwVWLEYCHQ4lrbyu6U2tYTwbw}
 
 app:
   jwt:

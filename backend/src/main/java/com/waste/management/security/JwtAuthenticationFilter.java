@@ -55,7 +55,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     private String extractJwt(HttpServletRequest request) {
-        // 1. Check HttpOnly Cookie first (Preferred for React SPA)
+        // 1. Check Authorization Bearer header first (Explicit per-request authentication)
+        String bearerToken = request.getHeader("Authorization");
+        if (StringUtils.hasText(bearerToken) && bearerToken.startsWith("Bearer ")) {
+            return bearerToken.substring(7);
+        }
+
+        // 2. Check HttpOnly Cookie as fallback (for browser sessions without explicit Bearer header)
         if (request.getCookies() != null) {
             for (Cookie cookie : request.getCookies()) {
                 if (tokenProvider.getCookieName().equals(cookie.getName())) {
@@ -64,12 +70,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     }
                 }
             }
-        }
-
-        // 2. Check Authorization Bearer header (Preferred for Postman / API clients)
-        String bearerToken = request.getHeader("Authorization");
-        if (StringUtils.hasText(bearerToken) && bearerToken.startsWith("Bearer ")) {
-            return bearerToken.substring(7);
         }
 
         return null;

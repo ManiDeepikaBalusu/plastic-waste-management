@@ -36,7 +36,7 @@ public class AssignmentController {
     }
 
     @GetMapping("/my-tasks")
-    @PreAuthorize("hasRole('VOLUNTEER')")
+    @PreAuthorize("hasAnyRole('VOLUNTEER', 'ADMIN')")
     public ResponseEntity<List<AssignmentResponse>> getMyAssignments(
             @AuthenticationPrincipal UserPrincipal volunteerUser) {
         List<AssignmentResponse> list = assignmentService.getMyAssignments(volunteerUser);
