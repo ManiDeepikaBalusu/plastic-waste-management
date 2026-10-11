@@ -28,9 +28,41 @@ public record VerificationResultResponse(
         String reviewDecision,
         String adminNotes,
         UUID reviewedBy,
+        String reviewedByName,
+        String reviewedByEmail,
         OffsetDateTime reviewedAt,
         OffsetDateTime verifiedAt
 ) {
+    public VerificationResultResponse(
+            UUID id,
+            UUID complaintId,
+            UUID assignmentId,
+            UUID imageId,
+            String verifierType,
+            String verificationStatus,
+            String checkType,
+            Boolean isValidPlastic,
+            BigDecimal confidenceScore,
+            BigDecimal deviceLatitude,
+            BigDecimal deviceLongitude,
+            BigDecimal exifLatitude,
+            BigDecimal exifLongitude,
+            BigDecimal targetLatitude,
+            BigDecimal targetLongitude,
+            Double distanceMeters,
+            Double distanceToleranceMeters,
+            String checkReasons,
+            String reviewDecision,
+            String adminNotes,
+            UUID reviewedBy,
+            OffsetDateTime reviewedAt,
+            OffsetDateTime verifiedAt) {
+        this(id, complaintId, assignmentId, imageId, verifierType, verificationStatus, checkType,
+                isValidPlastic, confidenceScore, deviceLatitude, deviceLongitude, exifLatitude,
+                exifLongitude, targetLatitude, targetLongitude, distanceMeters, distanceToleranceMeters,
+                checkReasons, reviewDecision, adminNotes, reviewedBy, null, null, reviewedAt, verifiedAt);
+    }
+
     public static VerificationResultResponse fromEntity(VerificationResult entity) {
         return new VerificationResultResponse(
                 entity.getId(),
@@ -54,6 +86,8 @@ public record VerificationResultResponse(
                 entity.getReviewDecision(),
                 entity.getAdminNotes(),
                 entity.getReviewedBy() != null ? entity.getReviewedBy().getId() : null,
+                entity.getReviewedBy() != null ? entity.getReviewedBy().getFullName() : null,
+                entity.getReviewedBy() != null ? entity.getReviewedBy().getEmail() : null,
                 entity.getReviewedAt(),
                 entity.getVerifiedAt()
         );

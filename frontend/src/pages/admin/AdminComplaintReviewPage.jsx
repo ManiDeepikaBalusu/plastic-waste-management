@@ -93,13 +93,15 @@ export default function AdminComplaintReviewPage() {
     try {
       setActionLoading(true);
       setDecisionModal(prev => ({ ...prev, error: '' }));
-      await verificationsApi.submitDecision(decisionModal.verificationId, {
+      const updated = await verificationsApi.submitDecision(decisionModal.verificationId, {
         decision: decisionModal.decisionType,
         reason: decisionModal.reason.trim()
       });
+      // Immediately update local state so action buttons hide instantly
+      setVerifications(prev => prev.map(item => item.id === decisionModal.verificationId ? { ...item, ...updated } : item));
       setDecisionModal({ open: false, verificationId: null, decisionType: 'APPROVE', reason: '', error: '' });
       setFeedbackMsg(`Verification record successfully ${decisionModal.decisionType === 'APPROVE' ? 'APPROVED' : 'REJECTED'} by admin.`);
-      fetchDetails();
+      await fetchDetails();
     } catch (err) {
       setDecisionModal(prev => ({ ...prev, error: err.message || 'Failed to submit verification decision.' }));
     } finally {
@@ -283,13 +285,19 @@ export default function AdminComplaintReviewPage() {
 
           <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
             {/* Pending Cleanup Proof Verification Case */}
-            {verifications.find(v => (v.checkType === 'CLEANUP_RESOLUTION' || v.assignmentId) && (v.verificationStatus === 'NEEDS_REVIEW' || v.reviewDecision === 'PENDING')) && (
+            {verifications.find(v => (v.checkType === 'CLEANUP_RESOLUTION' || v.assignmentId) &&
+              (v.reviewDecision === 'PENDING' || (!v.reviewDecision && v.verificationStatus === 'NEEDS_REVIEW')) &&
+              v.reviewDecision !== 'APPROVED' && v.reviewDecision !== 'REJECTED' &&
+              v.verificationStatus !== 'APPROVED_BY_ADMIN' && v.verificationStatus !== 'REJECTED_BY_ADMIN') && (
               <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
                 <span style={{ fontSize: '0.82rem', color: '#fbbf24', display: 'flex', alignItems: 'center', gap: '0.35rem', fontWeight: 600 }}>
                   <AlertTriangle size={15} /> Cleanup Proof Pending Review
                 </span>
                 <button
-                  onClick={() => handleOpenDecisionModal(verifications.find(v => (v.checkType === 'CLEANUP_RESOLUTION' || v.assignmentId) && (v.verificationStatus === 'NEEDS_REVIEW' || v.reviewDecision === 'PENDING')).id, 'APPROVE')}
+                  onClick={() => handleOpenDecisionModal(verifications.find(v => (v.checkType === 'CLEANUP_RESOLUTION' || v.assignmentId) &&
+                    (v.reviewDecision === 'PENDING' || (!v.reviewDecision && v.verificationStatus === 'NEEDS_REVIEW')) &&
+                    v.reviewDecision !== 'APPROVED' && v.reviewDecision !== 'REJECTED' &&
+                    v.verificationStatus !== 'APPROVED_BY_ADMIN' && v.verificationStatus !== 'REJECTED_BY_ADMIN').id, 'APPROVE')}
                   disabled={actionLoading}
                   className="service-btn"
                   style={{ background: 'rgba(16, 185, 129, 0.2)', borderColor: '#10b981', color: '#34d399', fontWeight: 700 }}
@@ -297,7 +305,10 @@ export default function AdminComplaintReviewPage() {
                   <CheckCircle size={16} /> Approve Cleanup
                 </button>
                 <button
-                  onClick={() => handleOpenDecisionModal(verifications.find(v => (v.checkType === 'CLEANUP_RESOLUTION' || v.assignmentId) && (v.verificationStatus === 'NEEDS_REVIEW' || v.reviewDecision === 'PENDING')).id, 'REJECT')}
+                  onClick={() => handleOpenDecisionModal(verifications.find(v => (v.checkType === 'CLEANUP_RESOLUTION' || v.assignmentId) &&
+                    (v.reviewDecision === 'PENDING' || (!v.reviewDecision && v.verificationStatus === 'NEEDS_REVIEW')) &&
+                    v.reviewDecision !== 'APPROVED' && v.reviewDecision !== 'REJECTED' &&
+                    v.verificationStatus !== 'APPROVED_BY_ADMIN' && v.verificationStatus !== 'REJECTED_BY_ADMIN').id, 'REJECT')}
                   disabled={actionLoading}
                   className="service-btn"
                   style={{ background: 'rgba(244, 63, 94, 0.2)', borderColor: '#f43f5e', color: '#f43f5e', fontWeight: 700 }}
@@ -493,9 +504,11 @@ export default function AdminComplaintReviewPage() {
                 const verifStatus = v.verificationStatus || v.status || 'VERIFIED';
                 const distMeters = v.distanceMeters != null ? v.distanceMeters : v.calculatedDistanceMeters;
                 const distTol = v.distanceToleranceMeters != null ? v.distanceToleranceMeters : 200;
-                const isWithinTolerance = distMeters != null ? distMeters <= distTol : true;
+                const isWithinTolerance = distMeters != null ? distMeters <= distTol : false;
                 const auditNotes = v.adminNotes || v.decisionReason;
-                const isPendingDecision = v.reviewDecision === 'PENDING' || verifStatus === 'NEEDS_REVIEW';
+                const isDecided = v.reviewDecision === 'APPROVED' || v.reviewDecision === 'REJECTED' ||
+                                  verifStatus === 'APPROVED_BY_ADMIN' || verifStatus === 'REJECTED_BY_ADMIN';
+                const isPendingDecision = !isDecided && (v.reviewDecision === 'PENDING' || verifStatus === 'NEEDS_REVIEW');
                 const flags = typeof v.checkReasons === 'string'
                   ? (() => { try { return JSON.parse(v.checkReasons); } catch(e) { return []; } })()
                   : (Array.isArray(v.checkReasons) ? v.checkReasons : (v.flags || []));
@@ -505,7 +518,7 @@ export default function AdminComplaintReviewPage() {
                     key={v.id || idx}
                     style={{
                       background: 'rgba(15, 23, 42, 0.75)',
-                      border: `1px solid ${isPendingDecision ? 'rgba(245, 158, 11, 0.4)' : 'var(--border-subtle)'}`,
+                      border: `1px solid ${isDecided ? 'var(--border-subtle)' : isPendingDecision ? 'rgba(245, 158, 11, 0.4)' : 'var(--border-subtle)'}`,
                       borderRadius: 'var(--radius-sm)',
                       padding: '1.25rem'
                     }}
@@ -524,22 +537,22 @@ export default function AdminComplaintReviewPage() {
                           borderRadius: '12px',
                           fontSize: '0.75rem',
                           fontWeight: 700,
-                          background: (v.reviewDecision === 'APPROVED' || verifStatus === 'APPROVED_BY_ADMIN') ? 'rgba(14, 165, 233, 0.2)'
+                          background: (v.reviewDecision === 'APPROVED' || verifStatus === 'APPROVED_BY_ADMIN') ? 'rgba(16, 185, 129, 0.2)'
                             : (v.reviewDecision === 'REJECTED' || verifStatus === 'REJECTED_BY_ADMIN') ? 'rgba(244, 63, 94, 0.2)'
                             : isPendingDecision ? 'rgba(245, 158, 11, 0.2)'
                             : 'rgba(16, 185, 129, 0.2)',
-                          color: (v.reviewDecision === 'APPROVED' || verifStatus === 'APPROVED_BY_ADMIN') ? '#38bdf8'
+                          color: (v.reviewDecision === 'APPROVED' || verifStatus === 'APPROVED_BY_ADMIN') ? '#34d399'
                             : (v.reviewDecision === 'REJECTED' || verifStatus === 'REJECTED_BY_ADMIN') ? '#f43f5e'
                             : isPendingDecision ? '#fbbf24'
                             : '#34d399',
                           border: `1px solid ${
-                            (v.reviewDecision === 'APPROVED' || verifStatus === 'APPROVED_BY_ADMIN') ? 'rgba(14, 165, 233, 0.4)'
+                            (v.reviewDecision === 'APPROVED' || verifStatus === 'APPROVED_BY_ADMIN') ? 'rgba(16, 185, 129, 0.4)'
                             : (v.reviewDecision === 'REJECTED' || verifStatus === 'REJECTED_BY_ADMIN') ? 'rgba(244, 63, 94, 0.4)'
                             : isPendingDecision ? 'rgba(245, 158, 11, 0.4)'
                             : 'rgba(16, 185, 129, 0.4)'
                           }`
                         }}>
-                          {v.reviewDecision === 'APPROVED' ? 'APPROVED_BY_ADMIN' : v.reviewDecision === 'REJECTED' ? 'REJECTED_BY_ADMIN' : verifStatus}
+                          {v.reviewDecision === 'APPROVED' ? 'APPROVED' : v.reviewDecision === 'REJECTED' ? 'REJECTED' : verifStatus}
                         </span>
                       </div>
                     </div>
@@ -551,12 +564,12 @@ export default function AdminComplaintReviewPage() {
                         <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', textTransform: 'uppercase', marginBottom: '0.25rem' }}>
                           Distance to Report Site
                         </div>
-                        <div style={{ fontSize: '0.95rem', fontWeight: 700, color: isWithinTolerance ? '#34d399' : '#f87171' }}>
-                          {distMeters != null ? `${distMeters.toFixed(1)} m` : 'N/A'}
+                        <div style={{ fontSize: '0.95rem', fontWeight: 700, color: distMeters != null ? (isWithinTolerance ? '#34d399' : '#f87171') : '#fbbf24' }}>
+                          {distMeters != null ? `${distMeters.toFixed(1)} m` : 'N/A (No GPS Distance)'}
                         </div>
                         <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '2px' }}>
                           Tolerance: {distTol ? `${distTol.toFixed(0)}m` : '200m'}
-                          {isWithinTolerance ? ' (Within bounds ✓)' : ' (Exceeded ⚠️)'}
+                          {distMeters != null ? (isWithinTolerance ? ' (Within bounds ✓)' : ' (Exceeded ⚠️)') : ' (Pending review)'}
                         </div>
                       </div>
 
@@ -594,8 +607,8 @@ export default function AdminComplaintReviewPage() {
                         <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-main)' }}>
                           {v.checkType || 'INITIAL_REPORT'}
                         </div>
-                        <div style={{ fontSize: '0.72rem', fontWeight: 600, color: isPendingDecision ? '#fbbf24' : '#34d399', marginTop: '2px' }}>
-                          {isPendingDecision ? '⚠️ Pending Admin Decision' : '✓ Verified by ' + (v.verifierType || 'System')}
+                        <div style={{ fontSize: '0.72rem', fontWeight: 600, color: isDecided ? (v.reviewDecision === 'APPROVED' ? '#34d399' : '#f43f5e') : isPendingDecision ? '#fbbf24' : '#34d399', marginTop: '2px' }}>
+                          {isDecided ? (v.reviewDecision === 'APPROVED' ? '✓ Approved by Admin' : '✗ Rejected by Admin') : isPendingDecision ? '⚠️ Pending Admin Decision' : '✓ Verified by ' + (v.verifierType || 'System')}
                         </div>
                       </div>
                     </div>
@@ -634,6 +647,7 @@ export default function AdminComplaintReviewPage() {
                           <button
                             type="button"
                             onClick={() => handleOpenDecisionModal(v.id, 'APPROVE')}
+                            disabled={actionLoading}
                             className="service-btn"
                             style={{ background: 'rgba(16, 185, 129, 0.2)', borderColor: '#10b981', color: '#34d399', padding: '0.4rem 0.85rem', fontSize: '0.82rem' }}
                           >
@@ -642,6 +656,7 @@ export default function AdminComplaintReviewPage() {
                           <button
                             type="button"
                             onClick={() => handleOpenDecisionModal(v.id, 'REJECT')}
+                            disabled={actionLoading}
                             className="service-btn"
                             style={{ background: 'rgba(244, 63, 94, 0.2)', borderColor: '#f43f5e', color: '#f43f5e', padding: '0.4rem 0.85rem', fontSize: '0.82rem' }}
                           >
@@ -651,9 +666,22 @@ export default function AdminComplaintReviewPage() {
                       </div>
                     )}
 
-                    {(v.reviewDecision === 'APPROVED' || v.reviewDecision === 'REJECTED' || verifStatus === 'APPROVED_BY_ADMIN' || verifStatus === 'REJECTED_BY_ADMIN') && (
-                      <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '0.6rem 0.85rem', borderRadius: '6px', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                        <strong>Admin Audit:</strong> {v.reviewDecision === 'APPROVED' || verifStatus === 'APPROVED_BY_ADMIN' ? 'Approved' : 'Rejected'} — Reason: "{auditNotes || 'None'}" {v.reviewedAt ? `(${new Date(v.reviewedAt).toLocaleString()})` : ''}
+                    {isDecided && (
+                      <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '0.75rem 1rem', borderRadius: '6px', fontSize: '0.82rem', color: 'var(--text-muted)', border: '1px solid var(--border-subtle)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
+                          <span style={{ fontWeight: 700, color: (v.reviewDecision === 'APPROVED' || verifStatus === 'APPROVED_BY_ADMIN') ? '#34d399' : '#f43f5e' }}>
+                            {(v.reviewDecision === 'APPROVED' || verifStatus === 'APPROVED_BY_ADMIN') ? '✓ Photo Approved by Admin' : '✗ Photo Rejected by Admin'}
+                          </span>
+                          {v.reviewedAt && (
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>
+                              • {new Date(v.reviewedAt).toLocaleString()}
+                            </span>
+                          )}
+                        </div>
+                        <div>
+                          <strong>Reviewer:</strong> {v.reviewedByName || v.reviewedByEmail || 'System Administrator'}
+                          {auditNotes ? ` — Reason: "${auditNotes}"` : ''}
+                        </div>
                       </div>
                     )}
                   </div>

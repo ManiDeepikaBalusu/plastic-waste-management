@@ -62,18 +62,6 @@ export default function LoginPage() {
     }
   };
 
-  const handleDemoFill = (demoEmail, demoRole) => {
-    if (demoRole === 'ADMIN') {
-      setEmail('admin@plasticwaste.org');
-      setPassword('AdminPassword2026!');
-    } else if (demoRole === 'VOLUNTEER') {
-      setEmail('volunteer@plasticwaste.org');
-      setPassword('VolunteerPassword2026!');
-    } else {
-      setEmail('citizena@test.org');
-      setPassword('Pass123!');
-    }
-  };
 
   return (
     <div className="main-content" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '70vh' }}>
@@ -178,35 +166,6 @@ export default function LoginPage() {
           </button>
         </form>
 
-        {/* Demo Fast Login Buttons */}
-        <div style={{ marginTop: '2rem', borderTop: '1px solid var(--border-subtle)', paddingTop: '1.25rem' }}>
-          <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)', textAlign: 'center', marginBottom: '0.75rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Quick Demo Autofill
-          </div>
-          <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
-            <button
-              type="button"
-              onClick={() => handleDemoFill('citizena@test.org', 'CITIZEN')}
-              style={{ background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)', fontSize: '0.75rem', padding: '0.35rem 0.65rem', borderRadius: 'var(--radius-sm)', cursor: 'pointer' }}
-            >
-              👤 Citizen
-            </button>
-            <button
-              type="button"
-              onClick={() => handleDemoFill('admin@test.org', 'ADMIN')}
-              style={{ background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--border-subtle)', color: '#38bdf8', fontSize: '0.75rem', padding: '0.35rem 0.65rem', borderRadius: 'var(--radius-sm)', cursor: 'pointer' }}
-            >
-              🛡️ Admin
-            </button>
-            <button
-              type="button"
-              onClick={() => handleDemoFill('volunteer@test.org', 'VOLUNTEER')}
-              style={{ background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--border-subtle)', color: '#34d399', fontSize: '0.75rem', padding: '0.35rem 0.65rem', borderRadius: 'var(--radius-sm)', cursor: 'pointer' }}
-            >
-              🧤 Volunteer
-            </button>
-          </div>
-        </div>
 
         <div style={{ textAlign: 'center', marginTop: '1.5rem', fontSize: '0.88rem', color: 'var(--text-muted)' }}>
           Don't have an account?{' '}

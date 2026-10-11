@@ -229,8 +229,8 @@ public class PhotoVerificationService {
         ExtractedImageMetadata exif = exifExtractor.extractMetadata(fileBytes);
 
         // 4. Coordinates & Distance Calculations
-        boolean hasDeviceGps = (deviceLat != null && deviceLon != null);
-        boolean hasExifGps = exif.hasExifGps();
+        boolean hasDeviceGps = (deviceLat != null && deviceLon != null && distanceCalculator.isValidCoordinate(deviceLat, deviceLon));
+        boolean hasExifGps = exif.hasExifGps() && distanceCalculator.isValidCoordinate(exif.exifLatitude(), exif.exifLongitude());
 
         String coordinateSource;
         if (hasDeviceGps && hasExifGps) {
@@ -243,17 +243,37 @@ public class PhotoVerificationService {
             coordinateSource = "NONE";
         }
 
-        // Effective coordinates: prefer device coordinates if provided, else fallback to EXIF GPS
-        BigDecimal effectiveLat = hasDeviceGps ? deviceLat : exif.exifLatitude();
-        BigDecimal effectiveLon = hasDeviceGps ? deviceLon : exif.exifLongitude();
+        // Effective coordinates: for live camera use device GPS; for uploaded files, prefer embedded EXIF GPS if present
+        BigDecimal effectiveLat;
+        BigDecimal effectiveLon;
+        if (hasDeviceGps && hasExifGps) {
+            if ("IN_APP_CAMERA".equalsIgnoreCase(captureSource)) {
+                effectiveLat = deviceLat;
+                effectiveLon = deviceLon;
+            } else {
+                effectiveLat = exif.exifLatitude();
+                effectiveLon = exif.exifLongitude();
+            }
+        } else if (hasDeviceGps) {
+            effectiveLat = deviceLat;
+            effectiveLon = deviceLon;
+        } else if (hasExifGps) {
+            effectiveLat = exif.exifLatitude();
+            effectiveLon = exif.exifLongitude();
+        } else {
+            effectiveLat = null;
+            effectiveLon = null;
+        }
 
         Double distToReport = null;
         if (effectiveLat != null && effectiveLon != null && targetLat != null && targetLon != null) {
-            distToReport = distanceCalculator.calculateDistanceMeters(effectiveLat, effectiveLon, targetLat, targetLon);
+            if (distanceCalculator.isValidCoordinate(effectiveLat, effectiveLon) && distanceCalculator.isValidCoordinate(targetLat, targetLon)) {
+                distToReport = distanceCalculator.calculateDistanceMeters(effectiveLat, effectiveLon, targetLat, targetLon);
+            }
         }
 
         Double distDeviceToExif = null;
-        if (hasDeviceGps && exif.exifLatitude() != null && exif.exifLongitude() != null) {
+        if (hasDeviceGps && hasExifGps) {
             distDeviceToExif = distanceCalculator.calculateDistanceMeters(deviceLat, deviceLon, exif.exifLatitude(), exif.exifLongitude());
         }
 
@@ -309,11 +329,32 @@ public class PhotoVerificationService {
             }
         }
 
-        // 5.5 Location Proximity Check
+        // 5.5 Coordinate Validation & Location Proximity Check
         boolean locationConsistent = false;
+        boolean hasInvalidCoordinates = false;
+
+        // Swapped coordinate detection
+        if (targetLat != null && targetLon != null && distanceCalculator.areCoordinatesSwapped(targetLat, targetLon)) {
+            flags.add("COORDINATES_SWAPPED_DETECTED: Target latitude (" + targetLat + ") exceeds 90 degrees; coordinates appear inverted");
+            hasInvalidCoordinates = true;
+        }
+        if (deviceLat != null && deviceLon != null && distanceCalculator.areCoordinatesSwapped(deviceLat, deviceLon)) {
+            flags.add("COORDINATES_SWAPPED_DETECTED: Device latitude (" + deviceLat + ") exceeds 90 degrees; coordinates appear inverted");
+            hasInvalidCoordinates = true;
+        }
+
+        // Range boundary validation
+        if ((targetLat != null && targetLon != null && !distanceCalculator.isValidCoordinate(targetLat, targetLon)) ||
+            (deviceLat != null && deviceLon != null && !distanceCalculator.isValidCoordinate(deviceLat, deviceLon))) {
+            flags.add("INVALID_COORDINATES: Coordinates outside valid geographic range (lat: -90..90, lon: -180..180)");
+            hasInvalidCoordinates = true;
+        }
+
         if (effectiveLat != null && effectiveLon != null) {
-            if (distToReport != null) {
-                if (distToReport <= toleranceMeters) {
+            if (targetLat != null && targetLon != null) {
+                if (hasInvalidCoordinates || distToReport == null) {
+                    flags.add("CALCULATION_UNAVAILABLE: Real distance could not be computed due to invalid coordinate bounds");
+                } else if (distToReport <= toleranceMeters) {
                     locationConsistent = true;
                     flags.add("LOCATION_MATCHED: Distance " + distToReport + "m is within allowed tolerance of " + toleranceMeters + "m");
                 } else {
@@ -374,11 +415,15 @@ public class PhotoVerificationService {
         if (isDuplicate) {
             status = "REJECTED";
             confidence = 0.0;
-        } else if (effectiveLat == null) {
-            // Neither GPS source provided -> Needs Review (NEVER automatically REJECT)
+        } else if (effectiveLat == null || targetLat == null) {
+            // Missing GPS -> Needs Review (NEVER automatically REJECT)
             status = "NEEDS_REVIEW";
             confidence = 0.50;
-        } else if (!locationConsistent || (distToReport != null && distToReport > toleranceMeters)) {
+        } else if (hasInvalidCoordinates || distToReport == null) {
+            // Invalid coordinates -> Needs Review (do NOT claim mismatch when coordinates cannot be calculated)
+            status = "NEEDS_REVIEW";
+            confidence = 0.30;
+        } else if (!locationConsistent || distToReport > toleranceMeters) {
             // Location mismatch -> Needs Review
             status = "NEEDS_REVIEW";
             confidence = 0.40;
@@ -539,10 +584,24 @@ public class PhotoVerificationService {
         User admin = userRepository.findById(adminUser.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Admin user not found"));
 
-        result.setReviewDecision("APPROVE".equalsIgnoreCase(request.decision()) ? "APPROVED" : "REJECTED");
+        if ("APPROVED".equalsIgnoreCase(result.getReviewDecision()) || "REJECTED".equalsIgnoreCase(result.getReviewDecision())) {
+            throw new IllegalStateException("Verification record " + verificationId + " has already been reviewed with decision: " + result.getReviewDecision());
+        }
+
+        String decisionUpper = "APPROVE".equalsIgnoreCase(request.decision()) ? "APPROVED" : "REJECTED";
+        String verifStatusUpper = "APPROVE".equalsIgnoreCase(request.decision()) ? "APPROVED_BY_ADMIN" : "REJECTED_BY_ADMIN";
+
+        result.setReviewDecision(decisionUpper);
+        result.setVerificationStatus(verifStatusUpper);
         result.setReviewedBy(admin);
         result.setReviewedAt(OffsetDateTime.now());
         result.setAdminNotes(request.reason());
+
+        if (result.getImage() != null) {
+            result.getImage().setVerificationStatus(verifStatusUpper);
+            complaintImageRepository.save(result.getImage());
+        }
+
         VerificationResult saved = verificationResultRepository.save(result);
 
         if ("CLEANUP_RESOLUTION".equalsIgnoreCase(result.getCheckType())) {

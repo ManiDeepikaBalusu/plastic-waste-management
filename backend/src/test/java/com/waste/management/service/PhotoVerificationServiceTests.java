@@ -538,4 +538,105 @@ class PhotoVerificationServiceTests {
         assertEquals("NEEDS_REVIEW", audits.get(0).getVerificationStatus());
         assertEquals("PENDING", audits.get(0).getReviewDecision(), "Admin review must be PENDING");
     }
+
+    @Test
+    @DisplayName("16. Identical Coordinates: Complaint and photo coordinates match exactly -> Distance is 0.0m and LOCATION_MATCHED")
+    void testExactIdenticalCoordinatesProduceZeroDistance() {
+        MockMultipartFile file = new MockMultipartFile("files", "identical_coords.jpg", "image/jpeg", sampleJpegBytes);
+        ComplaintImage img = complaintImageRepository.save(
+                new ComplaintImage(testComplaint, "https://res.cloudinary.com/demo/identical.jpg", "identical_id", "INITIAL_PROOF", citizen)
+        );
+
+        // Exact same coordinates as testComplaint (12.971600, 77.594600)
+        BigDecimal exactLat = new BigDecimal("12.971600");
+        BigDecimal exactLon = new BigDecimal("77.594600");
+
+        PhotoVerificationResultDto result = photoVerificationService.verifyInitialPhoto(
+                file, testComplaint, img, exactLat, exactLon, OffsetDateTime.now(), "IN_APP_CAMERA", citizen
+        );
+
+        assertEquals("VERIFIED", result.verificationStatus());
+        assertNotNull(result.distanceToTargetMeters());
+        assertEquals(0.0, result.distanceToTargetMeters(), 0.001, "Distance should be exactly 0.0 meters for identical coords");
+        assertTrue(result.flags().stream().anyMatch(f -> f.contains("LOCATION_MATCHED")));
+        assertFalse(result.flags().stream().anyMatch(f -> f.contains("LOCATION_MISMATCH")), "Must NOT report LOCATION_MISMATCH when coordinates are identical");
+    }
+
+    @Test
+    @DisplayName("17. Swapped Coordinates: Latitude > 90 detected and routed to NEEDS_REVIEW")
+    void testSwappedCoordinatesDetected() {
+        MockMultipartFile file = new MockMultipartFile("files", "swapped_coords.jpg", "image/jpeg", sampleJpegBytes);
+        ComplaintImage img = complaintImageRepository.save(
+                new ComplaintImage(testComplaint, "https://res.cloudinary.com/demo/swapped.jpg", "swapped_id", "INITIAL_PROOF", citizen)
+        );
+
+        // Swapped coordinates: Lat=120.5 (invalid latitude), Lon=12.9
+        BigDecimal swappedLat = new BigDecimal("120.500000");
+        BigDecimal swappedLon = new BigDecimal("12.900000");
+
+        PhotoVerificationResultDto result = photoVerificationService.verifyInitialPhoto(
+                file, testComplaint, img, swappedLat, swappedLon, OffsetDateTime.now(), "IN_APP_CAMERA", citizen
+        );
+
+        assertEquals("NEEDS_REVIEW", result.verificationStatus(), "Swapped coordinates should route to NEEDS_REVIEW");
+        assertTrue(result.flags().stream().anyMatch(f -> f.contains("COORDINATES_SWAPPED_DETECTED")));
+        assertFalse(result.flags().stream().anyMatch(f -> f.contains("LOCATION_MISMATCH")), "Must NOT report simple distance mismatch when coordinates are invalid");
+    }
+
+    @Test
+    @DisplayName("18. Admin Decision Processing: Updates status, decision, reviewer, and complaint image status")
+    void testAdminDecisionProcessing() {
+        MockMultipartFile file = new MockMultipartFile("files", "for_admin_review.jpg", "image/jpeg", sampleJpegBytes);
+        ComplaintImage img = complaintImageRepository.save(
+                new ComplaintImage(testComplaint, "https://res.cloudinary.com/demo/review_target.jpg", "target_id", "INITIAL_PROOF", citizen)
+        );
+
+        // Verification that lands in NEEDS_REVIEW
+        PhotoVerificationResultDto initial = photoVerificationService.verifyInitialPhoto(
+                file, testComplaint, img, null, null, null, "FILE_UPLOAD", citizen
+        );
+        assertEquals("NEEDS_REVIEW", initial.verificationStatus());
+
+        List<VerificationResult> records = verificationResultRepository.findByComplaintIdOrderByVerifiedAtDesc(testComplaint.getId());
+        assertFalse(records.isEmpty());
+        VerificationResult record = records.get(0);
+        assertEquals("PENDING", record.getReviewDecision());
+
+        // Admin submits APPROVE decision
+        VerificationDecisionRequest decisionReq = new VerificationDecisionRequest("APPROVE", "Manual verification confirms authentic photo");
+        VerificationResultResponse decided = photoVerificationService.processAdminDecision(record.getId(), decisionReq, UserPrincipal.create(admin));
+
+        assertEquals("APPROVED", decided.reviewDecision());
+        assertEquals("APPROVED_BY_ADMIN", decided.verificationStatus());
+        assertEquals("Verif Admin", decided.reviewedByName());
+        assertEquals("admin_verif@test.org", decided.reviewedByEmail());
+        assertEquals("Manual verification confirms authentic photo", decided.adminNotes());
+
+        // Verify ComplaintImage status is updated as well
+        ComplaintImage updatedImg = complaintImageRepository.findById(img.getId()).orElseThrow();
+        assertEquals("APPROVED_BY_ADMIN", updatedImg.getVerificationStatus());
+    }
+
+    @Test
+    @DisplayName("19. Duplicate Admin Decision Prevention: Second review attempt throws IllegalStateException")
+    void testDuplicateAdminDecisionPrevention() {
+        MockMultipartFile file = new MockMultipartFile("files", "dup_review.jpg", "image/jpeg", sampleJpegBytes);
+        ComplaintImage img = complaintImageRepository.save(
+                new ComplaintImage(testComplaint, "https://res.cloudinary.com/demo/dup_review.jpg", "dup_id", "INITIAL_PROOF", citizen)
+        );
+
+        photoVerificationService.verifyInitialPhoto(
+                file, testComplaint, img, null, null, null, "FILE_UPLOAD", citizen
+        );
+        VerificationResult record = verificationResultRepository.findByComplaintIdOrderByVerifiedAtDesc(testComplaint.getId()).get(0);
+
+        VerificationDecisionRequest firstDecision = new VerificationDecisionRequest("APPROVE", "First decision approved");
+        photoVerificationService.processAdminDecision(record.getId(), firstDecision, UserPrincipal.create(admin));
+
+        // Attempting to decide again should throw IllegalStateException
+        VerificationDecisionRequest secondDecision = new VerificationDecisionRequest("REJECT", "Second conflicting decision");
+        assertThrows(IllegalStateException.class, () ->
+                photoVerificationService.processAdminDecision(record.getId(), secondDecision, UserPrincipal.create(admin))
+        );
+    }
 }
