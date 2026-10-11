@@ -1,0 +1,81 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: plastic-waste-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: plastic_waste_db
+      POSTGRES_USER: ${DB_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-Deepu@125}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-postgres} -d plastic_waste_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - plastic-network
+
+  ai-service:
+    build:
+      context: ./ai-service
+      dockerfile: Dockerfile
+    container_name: plastic-waste-ai
+    restart: unless-stopped
+    environment:
+      PORT: 8001
+    networks:
+      - plastic-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: plastic-waste-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ai-service:
+        condition: service_started
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/plastic_waste_db
+      DB_USERNAME: ${DB_USERNAME:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-Deepu@125}
+      JWT_SECRET: ${JWT_SECRET:-404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost,http://127.0.0.1,http://localhost:5173,http://localhost:80}
+      OCR_SERVICE_URL: http://ai-service:8001
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-kozxwvl6}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:-931751964176326}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:-y6RwVWLEYCHQ4lrbyu6U2tYTwbw}
+      MAIL_HOST: ${MAIL_HOST:-smtp.gmail.com}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:-balusumanideepika20@gmail.com}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-xfeu rxqz mwyu erly}
+      MAIL_FROM: ${MAIL_FROM:-balusumanideepika20@gmail.com}
+      ADMIN_INITIAL_EMAIL: ${ADMIN_INITIAL_EMAIL:-admin@plasticwaste.org}
+      ADMIN_INITIAL_PASSWORD: ${ADMIN_INITIAL_PASSWORD:-AdminPassword2026!}
+      ADMIN_INITIAL_NAME: ${ADMIN_INITIAL_NAME:-System Administrator}
+    networks:
+      - plastic-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: plastic-waste-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - plastic-network
+
+networks:
+  plastic-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
