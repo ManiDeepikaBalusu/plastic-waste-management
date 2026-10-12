@@ -2,7 +2,8 @@ import urllib.request
 import urllib.parse
 import json
 
-BASE_URL = "http://localhost:8080/api/v1"
+
+BASE_URL = "https://plastic-waste-management-3.onrender.com/api/v1"
 
 def test_unauthenticated_protected_endpoints():
     print("=== Testing Unauthenticated Requests to Protected Endpoints ===")
